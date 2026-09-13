@@ -1,0 +1,52 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs22",
+      "ignore": ["node_modules", ".git", "*.log", "test", "lib/test", "scripts"],
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "IBIT Rooms",
+        "supportEmail": "support@ibit-rooms-20260914.firebaseapp.com"
+      }
+    }
+  },
+  "emulators": {
+    "auth": {"host": "127.0.0.1", "port": 9099},
+    "firestore": {"host": "127.0.0.1", "port": 8080},
+    "functions": {"host": "127.0.0.1", "port": 5001},
+    "ui": {"enabled": true, "host": "127.0.0.1", "port": 4000},
+    "singleProjectMode": true
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "buildConfigurations": {
+          ".": {
+            "projectId": "ibit-rooms-20260914",
+            "appId": "1:160950570401:android:eca804450b5abd437b0fe0",
+            "fileOutput": "android/app/google-services.json"
+          }
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ibit-rooms-20260914",
+          "configurations": {
+            "android": "1:160950570401:android:eca804450b5abd437b0fe0"
+          }
+        }
+      }
+    }
+  }
+}

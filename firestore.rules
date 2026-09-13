@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    match /rooms/{roomId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /roomDays/{roomDayId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /reservations/{reservationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

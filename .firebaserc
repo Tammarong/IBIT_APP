@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "demo-ibit-reservations",
+    "production": "ibit-rooms-20260914"
+  }
+}

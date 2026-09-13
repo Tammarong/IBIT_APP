@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "160950570401",
+    "project_id": "ibit-rooms-20260914",
+    "storage_bucket": "ibit-rooms-20260914.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:160950570401:android:eca804450b5abd437b0fe0",
+        "android_client_info": {
+          "package_name": "com.ibit.rooms"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "160950570401-h4ledljkl5i2899j8thg7q9moa9tbb0h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ibit.rooms",
+            "certificate_hash": "608aa06bc903303b1636454a497eb422251b2001"
+          }
+        },
+        {
+          "client_id": "160950570401-ihtinn5gv6aaf8qjdfupqeo3v6vamr9d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5-W1DAABwmMMdjQn1aqMeFhZYexn5cRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "160950570401-ihtinn5gv6aaf8qjdfupqeo3v6vamr9d.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
