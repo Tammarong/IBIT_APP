@@ -66,6 +66,10 @@ before(async () => {
     const ref = db.collection("rooms").doc(roomId);
     if (!(await ref.get()).exists) {await ref.create({name: `IBIT ${roomId}`}); createdRooms.push(roomId);}
   }
+  for (const [roomId, bookingEnabled] of [["5A09", true], ["4A07", false]] as const) {
+    const ref = db.collection("rooms").doc(roomId);
+    if (!(await ref.get()).exists) {await ref.create({name: roomId, bookingEnabled}); createdRooms.push(roomId);}
+  }
   ownerToken = await login(owner.uid, true);
   unverifiedToken = await login(stranger.uid, false);
   rules = await initializeTestEnvironment({projectId, firestore: {
@@ -100,6 +104,15 @@ test("callable authentication, verification, booking envelope and cancellation",
   assert.equal(created.result?.reservation.status, "confirmed");
   const cancelled = await callable("cancelReservation", {reservationId: created.result?.reservation.id}, ownerToken);
   assert.equal(cancelled.result?.reservation.status, "cancelled");
+});
+
+test("general ITD rooms can be booked; specialized and disabled rooms cannot", async () => {
+  const booking = await create({roomId: "5A09"});
+  assert.equal(booking.roomId, "5A09");
+  await assert.rejects(create({roomId: "5A01"}), {code: "invalid-argument"});
+  if (createdRooms.includes("4A07")) {
+    await assert.rejects(create({roomId: "4A07"}), {code: "failed-precondition"});
+  }
 });
 
 test("concurrent overlapping first bookings produce exactly one reservation", async () => {

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
 import {BookingError, checkBookable, dateStart, overlaps, parseBooking, startsAt} from "../src/domain";
 
 const valid = {requestId: "test-request-123", roomId: "room-01", date: "2026-09-14",
@@ -11,6 +13,21 @@ function rejects(change: Record<string, unknown>): void {
 
 test("accepts arbitrary whole-minute times and trims purpose", () => {
   assert.deepEqual(parseBooking(valid), {...valid, purpose: "Project meeting"});
+  for (const roomId of ["3A02", "4A07", "5A09", "7A07"]) {
+    assert.equal(parseBooking({...valid, roomId}).roomId, roomId);
+  }
+});
+
+test("booking allowlist matches the official catalog", () => {
+  const catalog = JSON.parse(readFileSync(resolve(process.cwd(), "../assets/rooms/itd_catalog.json"), "utf8")) as
+    {id: string; bookingEnabled: boolean}[];
+  for (const room of catalog) {
+    if (room.bookingEnabled) {
+      assert.equal(parseBooking({...valid, roomId: room.id}).roomId, room.id);
+    } else {
+      rejects({roomId: room.id});
+    }
+  }
 });
 
 test("accepts full opening windows and one-minute boundary bookings", () => {
@@ -63,7 +80,7 @@ test("overlap includes containment and allows adjacent intervals", () => {
 
 test("validates request IDs, room IDs, purpose length and required object", () => {
   for (const requestId of ["tiny", "x/unsafe-key", "a".repeat(129)]) rejects({requestId});
-  for (const roomId of ["room-07", "../rooms", null]) rejects({roomId});
+  for (const roomId of ["room-07", "4A08", "5A01", "5A02", "5A03", "5A08", "7A08", "../rooms", null]) rejects({roomId});
   for (const purpose of ["", "   ", "a".repeat(501), null]) rejects({purpose});
   for (const input of [null, [], "text", undefined]) assert.throws(() => parseBooking(input), BookingError);
 });

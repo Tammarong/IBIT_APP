@@ -5,6 +5,7 @@ import '../../core/booking_time.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../widgets/common.dart';
+import '../../widgets/itd_brand.dart';
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({
@@ -108,6 +109,8 @@ class _BookingsScreenState extends State<BookingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const ItdBrand(section: 'My Bookings', logoHeight: 42),
+                const SizedBox(height: 26),
                 const Eyebrow('A little planning. A lot of possibility.'),
                 const SizedBox(height: 10),
                 Text(
@@ -233,7 +236,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.line),
                       ),
                       child: Column(
@@ -268,7 +271,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                       style: TextStyle(
                                         color: booking.isCancelled
                                             ? AppColors.muted
-                                            : AppColors.teal,
+                                            : AppColors.accent,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),

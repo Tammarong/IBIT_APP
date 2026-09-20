@@ -155,6 +155,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('specialized room shows source information without Reserve', (
+    tester,
+  ) async {
+    const specialist = Room(
+      id: '5A01',
+      name: 'Server Room 5A01',
+      subtitle: 'Floor 5 · ITD, KMUTNB',
+      description: 'Officially listed server room.',
+      assetPath: 'assets/rooms/room-01.png',
+      officialName: 'ห้อง Server 5A01',
+      category: 'special',
+      sourceUrl: 'https://www.itd.kmutnb.ac.th/computer-room.php',
+      bookingEnabled: false,
+    );
+    await pump(
+      tester,
+      RoomDetailScreen(
+        room: specialist,
+        date: DateTime.utc(2027, 1, 4),
+        rooms: TestRooms(),
+        reservations: TestReservations(),
+        onBooked: () {},
+      ),
+    );
+    expect(find.text('Reserve this room'), findsNothing);
+    expect(find.textContaining('information only'), findsOneWidget);
+    expect(find.textContaining('Official ITD room listing'), findsOneWidget);
+  });
+
   testWidgets(
     'reservation form retains purpose when required times are missing',
     (tester) async {

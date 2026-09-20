@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/firebase_config.dart';
 import 'core/theme.dart';
+import 'widgets/itd_brand.dart';
 import 'app.dart';
 
 void main() {
@@ -36,12 +37,11 @@ class _BootstrapAppState extends State<BootstrapApp> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.meeting_room_outlined,
-                      color: AppColors.teal,
-                      size: 54,
+                    const SizedBox(
+                      width: 280,
+                      child: ItdBrand(section: 'IBIT Rooms', logoHeight: 60),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     const Text(
                       'IBIT Rooms',
                       style: TextStyle(

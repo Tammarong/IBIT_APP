@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../widgets/common.dart';
+import '../../widgets/itd_brand.dart';
 import 'room_detail_screen.dart';
 
 class RoomsScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
   late Stream<Map<String, List<BusyInterval>>> _availability = widget.rooms
       .watchAvailability(dayKey(_date));
   bool _availableOnly = false;
+  String _category = 'all';
   @override
   void initState() {
     super.initState();
@@ -89,47 +91,24 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.ink,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.grid_view_rounded,
-                        color: Color(0xFFCBE6CD),
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'IBIT',
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(width: 1, height: 20, color: AppColors.line),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        'ROOM RESERVATIONS',
-                        style: TextStyle(
-                          fontSize: 9,
-                          letterSpacing: 1.3,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                    ),
-                  ],
+                const ItdBrand(section: 'IBIT Room Reservations'),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.panel,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'ITD  /  Rooms',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 const Eyebrow('Your campus. Your space.'),
                 const SizedBox(height: 10),
                 Text(
@@ -146,7 +125,7 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: AppColors.ink,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
@@ -157,8 +136,8 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
-                          Icons.wb_sunny_outlined,
-                          color: Color(0xFFDDECC6),
+                          Icons.meeting_room_outlined,
+                          color: AppColors.orange,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -176,9 +155,9 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                             ),
                             SizedBox(height: 4),
                             Text(
-                              '6 rooms · Weekdays · Instant booking',
+                              '18 official spaces · 13 general rooms',
                               style: TextStyle(
-                                color: Color(0xFFC0D3C8),
+                                color: Color(0xFFE8EAF0),
                                 fontSize: 11,
                               ),
                             ),
@@ -235,10 +214,10 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                           (MediaQuery.textScalerOf(context).scale(14) / 14),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       decoration: BoxDecoration(
-                        color: selected ? AppColors.teal : Colors.white,
+                        color: selected ? AppColors.accent : Colors.white,
                         borderRadius: BorderRadius.circular(17),
                         border: Border.all(
-                          color: selected ? AppColors.teal : AppColors.line,
+                          color: selected ? AppColors.accent : AppColors.line,
                         ),
                       ),
                       child: Column(
@@ -288,6 +267,19 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                 Text(
                   'Find your room',
                   style: Theme.of(context).textTheme.titleLarge,
+                ),
+                ...[
+                  ('all', 'All'),
+                  ('classroom', 'Classrooms'),
+                  ('computer', 'Computer'),
+                  ('other', 'Other'),
+                ].map(
+                  (option) => ChoiceChip(
+                    label: Text(option.$2),
+                    selected: _category == option.$1,
+                    onSelected: (_) => setState(() => _category = option.$1),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
                 FilterChip(
                   label: const Text('Available'),
@@ -349,9 +341,16 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                 final rooms = roomSnapshot.data!
                     .where(
                       (r) =>
-                          !_availableOnly ||
-                          (snapshot.hasData &&
-                              _isAvailable(snapshot.data![r.id] ?? [])),
+                          r.listed &&
+                          (_category == 'all' ||
+                              (_category == 'other'
+                                  ? r.category != 'classroom' &&
+                                        r.category != 'computer'
+                                  : r.category == _category)) &&
+                          (!_availableOnly ||
+                              (r.bookingEnabled &&
+                                  snapshot.hasData &&
+                                  _isAvailable(snapshot.data![r.id] ?? []))),
                     )
                     .toList();
                 return SliverList.list(
@@ -374,12 +373,19 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                             : 'Waiting for the latest room schedules.',
                       ),
                     ...rooms.map((room) {
-                      final free = _isAvailable(snapshot.data?[room.id] ?? []);
+                      final free =
+                          room.bookingEnabled &&
+                          _isAvailable(snapshot.data?[room.id] ?? []);
                       return Padding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                         child: RoomCard(
                           room: room,
-                          availability: !snapshot.hasData || snapshot.hasError
+                          availability: !room.bookingEnabled
+                              ? (room.category == 'classroom' ||
+                                        room.category == 'computer'
+                                    ? 'Booking setup pending'
+                                    : 'Information only')
+                              : !snapshot.hasData || snapshot.hasError
                               ? 'Checking availability'
                               : free
                               ? 'Space available'
@@ -403,7 +409,7 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                     const Padding(
                       padding: EdgeInsets.fromLTRB(24, 0, 24, 28),
                       child: Text(
-                        'Made for the IBIT community.\nMonday–Friday · 8 AM–12 PM & 1–4 PM · Bangkok time',
+                        'Room names and photos: official ITD website.\nApp bookings: Monday–Friday · 8 AM–12 PM & 1–4 PM · Bangkok time',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
@@ -438,7 +444,7 @@ class RoomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Colors.white,
-    borderRadius: BorderRadius.circular(24),
+    borderRadius: BorderRadius.circular(12),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onTap,
@@ -466,7 +472,9 @@ class RoomCard extends StatelessWidget {
                       Icon(
                         Icons.circle,
                         size: 6,
-                        color: available ? AppColors.teal : AppColors.muted,
+                        color: available
+                            ? AppColors.available
+                            : AppColors.muted,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -520,7 +528,7 @@ class RoomCard extends StatelessWidget {
                   child: const Icon(
                     Icons.arrow_outward_rounded,
                     size: 21,
-                    color: AppColors.teal,
+                    color: AppColors.accent,
                   ),
                 ),
               ],

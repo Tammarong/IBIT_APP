@@ -29,6 +29,9 @@ export class ReservationService {
         return previous;
       }
       if (!room.exists) throw new BookingError("not-found", "This room is no longer available.");
+      if (!input.roomId.startsWith("room-") && room.data()?.bookingEnabled !== true) {
+        throw new BookingError("failed-precondition", "This room is not open for app reservations.");
+      }
       const createdAt = this.now();
       checkBookable(input, createdAt);
       const intervals = (day.data()?.intervals ?? []) as Interval[];

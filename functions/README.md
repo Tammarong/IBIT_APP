@@ -22,7 +22,7 @@ The scripts find Android Studio's bundled Java on Windows when it is absent from
 
 Ports: Auth 9099, Firestore 8080, Functions 5001, UI 4000, all bound to `127.0.0.1`. Android's emulator reaches the host through `10.0.2.2`. The development project ID is `demo-ibit-reservations` and the callable region is `asia-southeast1`.
 
-The seed creates missing `room-01` through `room-06` documents. Repeating it preserves edited metadata and all reservations. Images are Flutter assets by default; administrators can set `imageUrl` in room metadata to use their own room photography. Auth accounts are created through the app. The emulator console prints local verification and password-reset links.
+The seed creates missing documents for the 18 rooms in `assets/rooms/itd_catalog.json`. It retains the older `room-01` through `room-06` demo documents for existing reservation history. Repeating it preserves edited metadata and all reservations. Official room photos load from the ITD website through `imageUrl`. The 13 general classrooms and computer rooms have `bookingEnabled: true`; five specialized rooms have it set to `false`. Auth accounts are created through the app. The emulator console prints local verification and password-reset links.
 
 ## Callable contract
 
@@ -38,7 +38,7 @@ A reservation ID is SHA-256 of the authenticated UID plus request ID. A reused r
 
 ## Data and concurrency
 
-- `rooms/{roomId}` stores editable `name`, `subtitle`, `description`, `assetPath`, nullable `imageUrl`, and `facilities` strings. Capacity is intentionally omitted until supplied by the faculty.
+- `rooms/{roomId}` stores editable `name`, `officialName`, `category`, `floor`, `sourceUrl`, `subtitle`, `description`, `assetPath`, nullable `imageUrl`, `bookingEnabled`, and `facilities` strings. Capacity is intentionally omitted until supplied by the faculty.
 - `reservations/{id}` stores private reservation details; reads and queries are limited to the owner.
 - `roomDays/{roomId}_{date}` stores `roomId`, `date`, and `intervals: [{ reservationId, startMinute, endMinute }]`. It contains no identity or booking purpose.
 

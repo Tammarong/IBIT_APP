@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/services.dart';
 
 import '../core/firebase_config.dart';
 import 'models.dart';
@@ -34,16 +36,47 @@ class FirebaseRoomRepository implements RoomRepository {
   FirebaseRoomRepository({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
   final FirebaseFirestore _firestore;
+  late final Future<List<Map<String, dynamic>>> _catalog = rootBundle
+      .loadString('assets/rooms/itd_catalog.json')
+      .then(
+        (content) => (jsonDecode(content) as List)
+            .map((entry) => Map<String, dynamic>.from(entry as Map))
+            .toList(),
+      );
 
   @override
-  Stream<List<Room>> watchRooms() =>
-      _firestore.collection('rooms').snapshots().map((snapshot) {
-        final rooms = snapshot.docs
-            .map((doc) => Room.fromMap(doc.id, doc.data()))
-            .toList();
-        rooms.sort((a, b) => a.name.compareTo(b.name));
-        return rooms;
-      });
+  Stream<List<Room>> watchRooms() async* {
+    final catalog = await _catalog;
+    yield* _firestore.collection('rooms').snapshots().map((snapshot) {
+      final live = {for (final doc in snapshot.docs) doc.id: doc.data()};
+      final catalogIds = catalog.map((entry) => entry['id'] as String).toSet();
+      final rooms = catalog.map((entry) {
+        final id = entry['id'] as String;
+        final configured = live[id];
+        return Room.fromMap(id, {
+          ...entry,
+          'subtitle': 'Floor ${entry['floor']} · ITD, KMUTNB',
+          'description': '',
+          'assetPath': 'assets/rooms/room-01.png',
+          ...?configured,
+          // A room cannot be reserved until its server-side document exists.
+          'bookingEnabled':
+              configured != null &&
+              entry['bookingEnabled'] == true &&
+              configured['bookingEnabled'] == true,
+        });
+      }).toList();
+      rooms.addAll(
+        snapshot.docs
+            .where((doc) => !catalogIds.contains(doc.id))
+            .map(
+              (doc) => Room.fromMap(doc.id, {...doc.data(), 'listed': false}),
+            ),
+      );
+      rooms.sort((a, b) => a.name.compareTo(b.name));
+      return rooms;
+    });
+  }
 
   @override
   Stream<Map<String, List<BusyInterval>>> watchAvailability(String date) =>

@@ -429,11 +429,11 @@ class ReservationSuccessScreen extends StatelessWidget {
               padding: const EdgeInsets.all(26),
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.mint,
+                color: AppColors.successTint,
               ),
               child: const Icon(
                 Icons.check_rounded,
-                color: AppColors.teal,
+                color: AppColors.available,
                 size: 48,
               ),
             ),
@@ -456,7 +456,7 @@ class ReservationSuccessScreen extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(12),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(

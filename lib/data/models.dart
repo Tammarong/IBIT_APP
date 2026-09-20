@@ -9,6 +9,12 @@ class Room {
     required this.assetPath,
     this.imageUrl,
     this.facilities = const [],
+    this.officialName,
+    this.category = 'classroom',
+    this.floor,
+    this.sourceUrl,
+    this.bookingEnabled = true,
+    this.listed = true,
   });
 
   final String id;
@@ -18,6 +24,12 @@ class Room {
   final String assetPath;
   final String? imageUrl;
   final List<String> facilities;
+  final String? officialName;
+  final String category;
+  final int? floor;
+  final String? sourceUrl;
+  final bool bookingEnabled;
+  final bool listed;
 
   factory Room.fromMap(String id, Map<String, dynamic> data) => Room(
     id: id,
@@ -27,6 +39,12 @@ class Room {
     assetPath: data['assetPath'] as String? ?? 'assets/rooms/$id.png',
     imageUrl: data['imageUrl'] as String?,
     facilities: List<String>.from(data['facilities'] as List? ?? const []),
+    officialName: data['officialName'] as String?,
+    category: data['category'] as String? ?? 'classroom',
+    floor: (data['floor'] as num?)?.toInt(),
+    sourceUrl: data['sourceUrl'] as String?,
+    bookingEnabled: data['bookingEnabled'] as bool? ?? true,
+    listed: data['listed'] as bool? ?? true,
   );
 }
 

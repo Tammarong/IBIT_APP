@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../core/firebase_config.dart';
 import '../../widgets/common.dart';
+import '../../widgets/itd_brand.dart';
 import '../auth/auth_controller.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -20,6 +21,8 @@ class AccountScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.fromLTRB(24, 26, 24, 32),
           children: [
+            const ItdBrand(section: 'Account', logoHeight: 42),
+            const SizedBox(height: 26),
             const Eyebrow('Part of something good'),
             const SizedBox(height: 10),
             Text(
@@ -31,19 +34,19 @@ class AccountScreen extends StatelessWidget {
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
                   CircleAvatar(
                     radius: 34,
-                    backgroundColor: AppColors.mint,
+                    backgroundColor: AppColors.successTint,
                     child: Text(
                       name.characters.first.toUpperCase(),
                       style: const TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.teal,
+                        color: AppColors.available,
                       ),
                     ),
                   ),
@@ -66,13 +69,16 @@ class AccountScreen extends StatelessWidget {
                       Icon(
                         Icons.verified_outlined,
                         size: 16,
-                        color: AppColors.teal,
+                        color: AppColors.available,
                       ),
                       SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           'Verified member',
-                          style: TextStyle(color: AppColors.teal, fontSize: 12),
+                          style: TextStyle(
+                            color: AppColors.available,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],

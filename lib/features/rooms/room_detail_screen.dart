@@ -36,11 +36,11 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(12),
           child: RoomArtwork(room: widget.room, height: 248),
         ),
         const SizedBox(height: 26),
-        const Eyebrow('IBIT faculty · Campus collection'),
+        const Eyebrow('ITD faculty · Official room listing'),
         const SizedBox(height: 8),
         Text(
           widget.room.name,
@@ -49,13 +49,41 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
         const SizedBox(height: 8),
         Text(
           widget.room.subtitle,
-          style: const TextStyle(color: AppColors.teal, fontSize: 16),
+          style: const TextStyle(color: AppColors.accent, fontSize: 16),
         ),
-        const SizedBox(height: 20),
-        Text(
-          widget.room.description,
-          style: const TextStyle(color: AppColors.muted, height: 1.7),
-        ),
+        if (widget.room.officialName != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            widget.room.officialName!,
+            style: const TextStyle(color: AppColors.muted),
+          ),
+        ],
+        if (widget.room.description.trim().isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            widget.room.description,
+            style: const TextStyle(color: AppColors.muted, height: 1.7),
+          ),
+        ],
+        if (widget.room.sourceUrl != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_outlined,
+                size: 16,
+                color: AppColors.accent,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Official ITD room listing · itd.kmutnb.ac.th',
+                  style: const TextStyle(color: AppColors.accent, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ],
         if (widget.room.facilities.isNotEmpty) ...[
           const SizedBox(height: 18),
           Wrap(
@@ -72,72 +100,85 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
                 .toList(),
           ),
         ],
-        const SizedBox(height: 24),
-        const Divider(),
-        const SizedBox(height: 16),
-        Text(
-          'Make time for good ideas',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final date = await pickBookingDate(context, _date);
-            if (date != null) {
-              setState(() {
-                _date = dateOnly(date);
-                _availability = widget.rooms.watchAvailability(dayKey(date));
-              });
-            }
-          },
-          icon: const Icon(Icons.calendar_today_outlined, size: 18),
-          label: Text(dateLabel(dayKey(_date))),
-        ),
-        const SizedBox(height: 24),
-        StreamBuilder<Map<String, List<BusyInterval>>>(
-          key: ValueKey(dayKey(_date)),
-          stream: _availability,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Notice(
-                'Availability could not be loaded. Please check your connection.',
-                isError: true,
+        if (!widget.room.bookingEnabled) ...[
+          const SizedBox(height: 24),
+          Notice(
+            widget.room.category == 'classroom' ||
+                    widget.room.category == 'computer'
+                ? 'This room is listed by ITD. App booking will become available after its Firebase record is configured.'
+                : 'This specialized room is listed for information only and cannot be booked in the app.',
+          ),
+        ],
+        if (widget.room.bookingEnabled) ...[
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+          Text(
+            'Make time for good ideas',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final date = await pickBookingDate(context, _date);
+              if (date != null) {
+                setState(() {
+                  _date = dateOnly(date);
+                  _availability = widget.rooms.watchAvailability(dayKey(date));
+                });
+              }
+            },
+            icon: const Icon(Icons.calendar_today_outlined, size: 18),
+            label: Text(dateLabel(dayKey(_date))),
+          ),
+          const SizedBox(height: 24),
+          StreamBuilder<Map<String, List<BusyInterval>>>(
+            key: ValueKey(dayKey(_date)),
+            stream: _availability,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Notice(
+                  'Availability could not be loaded. Please check your connection.',
+                  isError: true,
+                );
+              }
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              return AvailabilityTimeline(
+                intervals: snapshot.data![widget.room.id] ?? [],
+                date: dayKey(_date),
               );
-            }
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            return AvailabilityTimeline(
-              intervals: snapshot.data![widget.room.id] ?? [],
-              date: dayKey(_date),
-            );
-          },
-        ),
-        const SizedBox(height: 26),
-        const Notice(
-          'Choose your own start and end time. Each reservation must fit within the morning or afternoon session.',
-        ),
+            },
+          ),
+          const SizedBox(height: 26),
+          const Notice(
+            'Choose your own start and end time. Each reservation must fit within the morning or afternoon session.',
+          ),
+        ],
       ],
     ),
-    bottomNavigationBar: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
-        child: FilledButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => ReservationScreen(
-                room: widget.room,
-                date: _date,
-                rooms: widget.rooms,
-                reservations: widget.reservations,
-                onBooked: widget.onBooked,
+    bottomNavigationBar: !widget.room.bookingEnabled
+        ? null
+        : SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ReservationScreen(
+                      room: widget.room,
+                      date: _date,
+                      rooms: widget.rooms,
+                      reservations: widget.reservations,
+                      onBooked: widget.onBooked,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Reserve this room'),
               ),
             ),
           ),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Reserve this room'),
-        ),
-      ),
-    ),
   );
 }

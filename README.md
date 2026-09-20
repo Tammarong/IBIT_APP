@@ -1,6 +1,6 @@
 # IBIT Rooms
 
-An Android-first Flutter app for booking the faculty’s six rooms. Browse illustrated room cards, select arbitrary minute-level times, confirm instantly, and manage your own reservations.
+An Android-first Flutter app with the ITD faculty's official room catalog and room reservations. Browse 18 listed spaces, select arbitrary minute-level times for the 13 general classrooms and computer rooms, and manage your own reservations. Teaching-preparation rooms, the server room, and the Pearson VUE exam room are shown for information only.
 
 Local development uses **Firebase emulators**. The workspace is also configured for the live Firebase project `ibit-rooms-20260914`; Email/Password and Google Sign-in are enabled there, with Android and Web OAuth clients provisioned. Cloud Functions deployment remains a separate step that requires Blaze billing.
 
@@ -37,14 +37,14 @@ The local project is `demo-ibit-reservations`. Open the [Firebase Emulator UI](h
 
 1. Create an email/password account in the app. Open its verification link from the Firebase terminal or Emulator UI logs, then tap **I’ve verified my email**. No real email is sent in emulator mode. Password reset links work the same way.
 2. Alternatively, tap **Try simulated Google account** to use a verified local development account immediately.
-3. Choose a weekday and a room. Select custom start/end times, enter a purpose, and review the reservation.
+3. Choose a weekday and one of the 13 reservable classrooms or computer rooms. Select custom start/end times, enter a purpose, and review the reservation.
 4. Confirm, then open **My Bookings**. Cancel before the start time to release the room.
 
 Bookings run Monday–Friday within **08:00–12:00** or **13:00–16:00**, in **Asia/Bangkok (UTC+7)** regardless of the phone’s timezone. One booking cannot cross lunch. Adjacent reservations are permitted. Past starts, overlapping reservations, invalid dates, and unverified booking attempts are rejected by the server. Date selection currently supports the next ten calendar years.
 
 ### Debug APK and physical phones
 
-Build an APK with `flutter build apk --debug`. The output is `build/app/outputs/flutter-apk/app-debug.apk`; the delivered copy is `artifacts/ibit-rooms-debug.apk`. It is a local development build and needs the running Firebase emulators.
+Build an APK with `flutter build apk --debug --dart-define=FIREBASE_MODE=emulator`. The output is `build/app/outputs/flutter-apk/app-debug.apk`; the room-catalog build is copied to `artifacts/ibit-rooms-itd-debug.apk`. It is a local development build and needs the running Firebase emulators. The older `artifacts/ibit-rooms-debug.apk` predates the ITD room catalog.
 
 To use an Android phone connected over USB, keep the Firebase services bound to localhost, forward their ports, and build with the device-local host:
 
@@ -63,13 +63,14 @@ Profile and release builds refuse emulator mode. Simulated Google credentials ar
 - `lib/data`: repository interfaces, Firebase implementations, and models. Controllers use `ChangeNotifier`.
 - `lib/core`: theme, Firebase environment configuration, and shared Bangkok calendar rules.
 - `functions`: TypeScript callable backend and tests; see [backend documentation](functions/README.md).
-- `assets/rooms`: six bundled room illustrations; prompts and provenance are in [assets/README.md](assets/README.md).
+- `assets/rooms/itd_catalog.json`: the 18 official room names, categories, floors, photo URLs, source pages, and booking eligibility. Six older demo illustrations remain in `assets/rooms`; their provenance is in [assets/README.md](assets/README.md).
+- `assets/branding`: the official ITD faculty wordmark and emblem, with source details in [branding notes](assets/branding/README.md). The interface uses the website's navy/orange/white palette and bundled Mitr font.
 
 Firestore stores `rooms/{roomId}`, private `reservations/{id}`, and shared `roomDays/{roomId}_{date}` availability. Daily availability contains opaque reservation IDs and intervals, never names, email addresses, or purposes. Only the owner can read a private reservation. Direct client writes are denied.
 
 `createReservation({requestId,roomId,date,startMinute,endMinute,purpose})` and `cancelReservation({reservationId})` return `{reservation}`. The backend derives ownership from the authentication token. A transaction locks the deterministic room/day record and writes the booking together, preventing concurrent first bookings from overlapping. The client retains request IDs for unchanged retries after a lost response. Cancellation atomically releases availability and keeps booking history.
 
-Room names, subtitles, descriptions, optional facilities, and image URLs can be edited in the Firestore console. Seeded room IDs are fixed at `room-01` through `room-06`. Unknown capacities are omitted. Illustrations are placeholders, not photographs of actual IBIT facilities.
+The catalog was transcribed from the official [classroom](https://www.itd.kmutnb.ac.th/class-room.php) and [computer-room](https://www.itd.kmutnb.ac.th/computer-room.php) pages. Room cards load their photos from those pages, so the photos need internet access. The pages do not list capacities, equipment, or individual room-booking policies; those details are not invented. The emulator seed creates 18 room documents without overwriting existing metadata or reservations. The older `room-01` through `room-06` demo documents are retained for booking history but hidden from the room browser. Firestore room metadata can be edited after seeding. For a bookable catalog room, the app enables Reserve only when its Firestore document exists with `bookingEnabled: true`; the callable backend also validates the room ID and this flag.
 
 ## Tests
 
@@ -79,14 +80,14 @@ See [VERIFICATION.md](VERIFICATION.md) for the completed checks and Android test
 flutter analyze
 flutter test
 .\scripts\test-backend.ps1 -UseRunningEmulators
-flutter drive --driver test_driver/integration_test.dart --target integration_test/app_flow_test.dart -d emulator-5556 --no-dds
+flutter drive --driver test_driver/integration_test.dart --target integration_test/app_flow_test.dart -d emulator-5554 --no-dds --dart-define=FIREBASE_MODE=emulator
 ```
 
 The backend script without `-UseRunningEmulators` starts and stops temporary emulators; do not use it while another set occupies the same ports. Backend tests cover booking boundaries, concurrent conflicts, repeated request IDs, cancellation, and Firestore access rules. They clean up only their own temporary records. Flutter tests cover date/time rules, auth/verification, preserved form input, network errors, and layouts at 320px width with 200% text.
 
 The Android integration test drives registration → local email verification → custom 08:10–09:35 reservation → confirmation → My Bookings → cancellation, checks Firestore availability, then tests the simulated Google provider with a callable booking. It creates a distinct local email account and cancelled history for inspection. Run the room seed first; this test is restricted to emulator mode.
 
-Replace the device ID with the one reported by `flutter devices`. On this Windows host, the standard emulator transport intermittently disconnected during debugger startup. The successful run used `adb connect 127.0.0.1:5557` for the AVD on port 5556, followed by the command above with `-d 127.0.0.1:5557`. The driver with `--no-dds` avoids the local Dart Development Service startup issue. Rebuild with `flutter build apk --debug -t lib/main.dart` after integration testing because the test uses its own app entry point.
+Replace the device ID with the one reported by `flutter devices`. The driver with `--no-dds` avoids the local Dart Development Service startup issue. Rebuild with `flutter build apk --debug --dart-define=FIREBASE_MODE=emulator -t lib/main.dart` after integration testing because the test uses its own app entry point.
 
 Android may log an optional Firebase Installations `FIS_AUTH_ERROR` for the deliberately fake local API key. Authentication, Firestore, and booking functions still use the configured emulators; the complete booking flow has been verified with this configuration.
 
@@ -109,8 +110,8 @@ Android may log an optional Firebase Installations `FIS_AUTH_ERROR` for the deli
    flutter run -d YOUR_ANDROID_DEVICE --dart-define-from-file=firebase.cloud.json
    ```
 
-6. Add the six room documents through the live Firestore console using the documented room fields. The local seed deliberately cannot write to a live project. Test real email verification and Google account selection on a Google Play-enabled device. Configure production signing before building a release APK or app bundle; the scaffold currently uses debug signing.
+6. Add the 18 room documents from `assets/rooms/itd_catalog.json` to live Firestore, including `bookingEnabled` and the metadata fields. The local seed deliberately cannot write to a live project. Until a room document exists, the app displays its official information but disables booking. Test real email verification and Google account selection on a Google Play-enabled device. Configure production signing before building a release APK or app bundle; the scaffold currently uses debug signing.
 
 Official setup references: [FlutterFire configuration](https://firebase.google.com/docs/flutter/setup), [Google authentication](https://firebase.google.com/docs/auth/flutter/federated-auth), [Firebase emulators](https://firebase.google.com/docs/emulator-suite/connect_auth), and [Cloud Functions deployment](https://firebase.google.com/docs/functions/get-started).
 
-The live project has Firestore, rules/indexes, six room records, Email/Password authentication, Google Sign-in, and Android OAuth configuration. Cloud Functions deployment, production Google OAuth verification on a device, admin dashboard, payment flow, recurring booking, and notifications remain outside this first delivery.
+The live project has Firestore, rules/indexes, six older demo room records, Email/Password authentication, Google Sign-in, and Android OAuth configuration. Its new ITD room documents and booking Functions still need to be deployed/configured before live reservations can work. Cloud Functions deployment requires Blaze billing; the emulator can be used without it.

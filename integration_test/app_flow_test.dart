@@ -161,12 +161,12 @@ void main() {
       await tester.tap(tile.first);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('IBIT Room 01'),
+        find.text('Classroom 3A02'),
         220,
         scrollable: find.byType(Scrollable).first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('IBIT Room 01'));
+      await tester.tap(find.text('Classroom 3A02'));
       await tester.pumpAndSettle();
       await tapText('Reserve this room');
       await enterTime(const Key('start_time'), '8', '10');
@@ -199,7 +199,7 @@ void main() {
       expect(booking['endMinute'], 575);
       final day = await FirebaseFirestore.instance
           .collection('roomDays')
-          .doc('room-01_${BookingTime.dateKey(date)}')
+          .doc('3A02_${BookingTime.dateKey(date)}')
           .get();
       expect(
         (day['intervals'] as List).any((i) => i['reservationId'] == booking.id),

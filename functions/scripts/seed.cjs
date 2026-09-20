@@ -1,6 +1,8 @@
 /* Seed only the local demo project. Existing metadata and bookings are preserved. */
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
+const {readFileSync} = require('node:fs');
+const {resolve} = require('node:path');
 
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
 if (!/^(localhost|127\.0\.0\.1):\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST)) {
@@ -30,7 +32,25 @@ async function main() {
       }
     });
   }
-  console.log(`Seed complete: ${created} rooms created; existing rooms and reservations preserved.`);
+  const catalog = JSON.parse(readFileSync(resolve(__dirname, '../../assets/rooms/itd_catalog.json'), 'utf8'));
+  for (const room of catalog) {
+    const ref = db.collection('rooms').doc(room.id);
+    await db.runTransaction(async tx => {
+      const existing = await tx.get(ref);
+      if (!existing.exists) {
+        const {id, ...metadata} = room;
+        tx.create(ref, {
+          ...metadata,
+          subtitle: `Floor ${room.floor} · ITD, KMUTNB`,
+          description: '',
+          assetPath: 'assets/rooms/room-01.png',
+          facilities: [],
+        });
+        created++;
+      }
+    });
+  }
+  console.log(`Seed complete: ${created} rooms created; existing metadata and reservations preserved.`);
   await db.terminate();
 }
 main().catch(error => {console.error(error); process.exitCode = 1;});

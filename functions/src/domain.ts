@@ -53,8 +53,9 @@ export function parseBooking(value: unknown): BookingInput {
   if (typeof data.requestId !== "string" || !/^[a-zA-Z0-9_-]{8,128}$/.test(data.requestId)) {
     invalid("A valid request ID is required. Please retry the reservation.");
   }
-  if (typeof data.roomId !== "string" || !/^room-0[1-6]$/.test(data.roomId)) {
-    invalid("Choose one of the six IBIT rooms.");
+  if (typeof data.roomId !== "string" ||
+      !/^(?:room-0[1-6]|(?:3A(?:02|03|13)|4A(?:02|03|04|05|06|07)|5A(?:09|10)|7A(?:02|07)))$/.test(data.roomId)) {
+    invalid("Choose a reservable ITD room.");
   }
   if (typeof data.date !== "string") invalid("Choose a valid date.");
   dateStart(data.date as string);

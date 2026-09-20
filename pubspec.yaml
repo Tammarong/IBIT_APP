@@ -67,6 +67,17 @@ flutter:
   uses-material-design: true
   assets:
     - assets/rooms/
+    - assets/branding/
+
+  fonts:
+    - family: Mitr
+      fonts:
+        - asset: assets/fonts/Mitr-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Mitr-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Mitr-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

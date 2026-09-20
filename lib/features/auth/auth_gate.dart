@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/firebase_config.dart';
+import '../../core/theme.dart';
+import '../../widgets/itd_brand.dart';
 import 'auth_controller.dart';
-
-const _navy = Color(0xFF132E35);
-const _teal = Color(0xFF14665C);
-const _cream = Color(0xFFF8F7F3);
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key, required this.controller, required this.child});
@@ -147,7 +145,7 @@ class _AuthScreenState extends State<AuthScreen> {
     builder: (context, _) {
       final loading = widget.controller.loading;
       return Scaffold(
-        backgroundColor: _cream,
+        backgroundColor: AppColors.cream,
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
@@ -160,26 +158,30 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const _Wordmark(),
+                        const ItdBrand(section: 'IBIT Rooms'),
                         const SizedBox(height: 26),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(12),
                           child: SizedBox(
                             height: 174,
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                Image.asset(
-                                  'assets/rooms/room-01.png',
+                                Image.network(
+                                  'https://www.itd.kmutnb.ac.th/img/menu-about/class-room/3A02.jpg',
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stack) =>
-                                      Container(
-                                        color: const Color(0xFFDFE8DF),
-                                        child: const Icon(
-                                          Icons.meeting_room_outlined,
-                                          size: 80,
-                                          color: _teal,
+                                  cacheWidth: 1200,
+                                  loadingBuilder: (context, child, progress) =>
+                                      progress == null
+                                      ? child
+                                      : Image.asset(
+                                          'assets/rooms/room-01.png',
+                                          fit: BoxFit.cover,
                                         ),
+                                  errorBuilder: (context, error, stack) =>
+                                      Image.asset(
+                                        'assets/rooms/room-01.png',
+                                        fit: BoxFit.cover,
                                       ),
                                 ),
                                 const DecoratedBox(
@@ -189,7 +191,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                       end: Alignment.bottomCenter,
                                       colors: [
                                         Colors.transparent,
-                                        Color(0xAA132E35),
+                                        Color(0xCC192F59),
                                       ],
                                     ),
                                   ),
@@ -220,7 +222,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w700,
-                            color: _navy,
+                            color: AppColors.ink,
                             letterSpacing: -0.9,
                             height: 1.15,
                           ),
@@ -231,7 +233,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               ? 'Create an account to reserve your next IBIT room.'
                               : 'Sign in to find a room and make time for what matters.',
                           style: const TextStyle(
-                            color: Color(0xFF61716D),
+                            color: AppColors.muted,
                             height: 1.5,
                           ),
                         ),
@@ -336,7 +338,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               padding: EdgeInsets.symmetric(horizontal: 16),
                               child: Text(
                                 'or',
-                                style: TextStyle(color: Color(0xFF61716D)),
+                                style: TextStyle(color: AppColors.muted),
                               ),
                             ),
                             Expanded(child: Divider()),
@@ -381,7 +383,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Color(0xFF61716D),
+                                color: AppColors.muted,
                                 letterSpacing: 1.1,
                               ),
                             ),
@@ -417,7 +419,7 @@ class _VerificationScreenState extends State<_VerificationScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: _cream,
+    backgroundColor: AppColors.cream,
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -427,14 +429,14 @@ class _VerificationScreenState extends State<_VerificationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _Wordmark(),
+                const ItdBrand(section: 'IBIT Rooms'),
                 const SizedBox(height: 56),
                 const CircleAvatar(
                   radius: 48,
-                  backgroundColor: Color(0xFFDFE8DF),
+                  backgroundColor: AppColors.mint,
                   child: Icon(
                     Icons.mark_email_unread_outlined,
-                    color: _teal,
+                    color: AppColors.accent,
                     size: 44,
                   ),
                 ),
@@ -445,14 +447,14 @@ class _VerificationScreenState extends State<_VerificationScreen> {
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w700,
-                    color: _navy,
+                    color: AppColors.ink,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'Verify ${widget.controller.currentUser?.email ?? 'your email'} to start reserving rooms.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(height: 1.6, color: Color(0xFF61716D)),
+                  style: const TextStyle(height: 1.6, color: AppColors.muted),
                 ),
                 const SizedBox(height: 22),
                 Container(
@@ -529,37 +531,6 @@ class _VerificationScreenState extends State<_VerificationScreen> {
         ),
       ),
     ),
-  );
-}
-
-class _Wordmark extends StatelessWidget {
-  const _Wordmark();
-  @override
-  Widget build(BuildContext context) => const Wrap(
-    crossAxisAlignment: WrapCrossAlignment.center,
-    children: [
-      Icon(Icons.door_sliding_outlined, color: _teal, size: 30),
-      SizedBox(width: 9),
-      Text(
-        'IBIT',
-        style: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: _navy,
-          fontSize: 23,
-          letterSpacing: 1.6,
-        ),
-      ),
-      SizedBox(width: 8),
-      Text(
-        'ROOMS',
-        style: TextStyle(
-          color: _teal,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 2.3,
-        ),
-      ),
-    ],
   );
 }
 

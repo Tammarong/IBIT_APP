@@ -65,7 +65,7 @@ class RoomArtwork extends StatelessWidget {
       child: const Icon(
         Icons.meeting_room_outlined,
         size: 64,
-        color: AppColors.teal,
+        color: AppColors.accent,
       ),
     );
     Widget bundled() => Image.asset(
@@ -77,7 +77,8 @@ class RoomArtwork extends StatelessWidget {
     );
     final url = room.imageUrl;
     return Semantics(
-      label: 'Illustration of ${room.name}',
+      label:
+          '${url != null && url.isNotEmpty ? 'Photo' : 'Illustration'} of ${room.name}',
       image: true,
       child: url != null && url.isNotEmpty
           ? Image.network(
@@ -85,6 +86,10 @@ class RoomArtwork extends StatelessWidget {
               height: height,
               width: double.infinity,
               fit: BoxFit.cover,
+              cacheWidth:
+                  (MediaQuery.sizeOf(context).width *
+                          MediaQuery.devicePixelRatioOf(context))
+                      .round(),
               errorBuilder: (_, _, _) => bundled(),
             )
           : bundled(),
@@ -110,7 +115,7 @@ class Notice extends StatelessWidget {
         Icon(
           icon ?? (isError ? Icons.info_outline : Icons.schedule_outlined),
           size: 20,
-          color: isError ? const Color(0xFF9C3E28) : AppColors.teal,
+          color: isError ? const Color(0xFF9C3E28) : AppColors.accent,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -151,7 +156,7 @@ class EmptyState extends StatelessWidget {
             color: AppColors.mint,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, size: 38, color: AppColors.teal),
+          child: Icon(icon, size: 38, color: AppColors.accent),
         ),
         const SizedBox(height: 24),
         Text(
@@ -214,8 +219,8 @@ class AvailabilityTimeline extends StatelessWidget {
           spacing: 18,
           runSpacing: 8,
           children: [
-            _legend(AppColors.teal, 'Available'),
-            _legend(const Color(0xFFDAB99E), 'Reserved'),
+            _legend(AppColors.available, 'Available'),
+            _legend(const Color(0xFFB6C1CF), 'Reserved'),
           ],
         ),
         const SizedBox(height: 18),
@@ -302,8 +307,8 @@ class AvailabilityTimeline extends StatelessWidget {
                     color: minute < pastMinute
                         ? AppColors.line
                         : busy
-                        ? const Color(0xFFDAB99E)
-                        : const Color(0xFF88B7A3),
+                        ? const Color(0xFFB6C1CF)
+                        : AppColors.available,
                     child: const SizedBox.expand(),
                   ),
                 );
