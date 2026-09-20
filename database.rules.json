@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "appData": {
+      "rooms": {
+        ".read": "auth != null"
+      },
+      "roomDays": {
+        "$date": {
+          ".read": "auth != null"
+        }
+      },
+      "reservations": {
+        ".indexOn": ["userId"],
+        ".read": "auth != null && query.orderByChild == 'userId' && query.equalTo == auth.uid",
+        "$reservationId": {
+          ".read": "auth != null && data.child('userId').val() == auth.uid"
+        }
+      }
+    }
+  }
+}

@@ -4,13 +4,25 @@
       "source": "functions",
       "codebase": "default",
       "runtime": "nodejs22",
-      "ignore": ["node_modules", ".git", "*.log", "test", "lib/test", "scripts"],
-      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.log",
+        "test",
+        "lib/test",
+        "scripts"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
     }
   ],
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "database": {
+    "rules": "database.rules.json"
   },
   "auth": {
     "providers": {
@@ -22,10 +34,27 @@
     }
   },
   "emulators": {
-    "auth": {"host": "127.0.0.1", "port": 9099},
-    "firestore": {"host": "127.0.0.1", "port": 8080},
-    "functions": {"host": "127.0.0.1", "port": 5001},
-    "ui": {"enabled": true, "host": "127.0.0.1", "port": 4000},
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    "database": {
+      "host": "127.0.0.1",
+      "port": 9000
+    },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
+    },
+    "ui": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 4000
+    },
     "singleProjectMode": true
   },
   "flutter": {

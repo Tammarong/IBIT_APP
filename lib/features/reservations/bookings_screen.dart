@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/firebase_config.dart';
 import '../../core/theme.dart';
 import '../../core/booking_time.dart';
 import '../../data/models.dart';
@@ -194,14 +195,19 @@ class _BookingsScreenState extends State<BookingsScreen> {
                     title: switch (_filter) {
                       1 => 'Good things are ahead',
                       2 => 'Nothing cancelled',
-                      _ => 'Your next idea starts here',
+                      _ =>
+                        EmulatorConfig.bookingsAvailable
+                            ? 'Your next idea starts here'
+                            : 'Online booking is being prepared',
                     },
                     message: switch (_filter) {
                       1 => 'Your completed reservations will appear here.',
                       2 =>
                         'Cancelled reservations will stay here for your reference.',
                       _ =>
-                        'Find a room and make a little time for something great.',
+                        EmulatorConfig.bookingsAvailable
+                            ? 'Find a room and make a little time for something great.'
+                            : 'You can browse live ITD room information now. Reservations will appear here when booking opens.',
                     },
                     action: _filter == 0
                         ? FilledButton(

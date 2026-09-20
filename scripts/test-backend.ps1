@@ -10,12 +10,14 @@ if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
 }
 Push-Location $ibitRoot
 try {
-    npm --prefix functions test
-    if ($LASTEXITCODE -ne 0) { throw 'Backend unit tests failed.' }
     if ($UseRunningEmulators) {
+        npm --prefix functions run test:unit:compiled
+        if ($LASTEXITCODE -ne 0) { throw 'Backend unit tests failed.' }
         npm --prefix functions run test:integration
     } else {
-        firebase emulators:exec --project demo-ibit-reservations --only 'auth,firestore,functions' 'npm --prefix functions run test:integration'
+        npm --prefix functions test
+        if ($LASTEXITCODE -ne 0) { throw 'Backend unit tests failed.' }
+        firebase emulators:exec --project demo-ibit-reservations --only 'auth,database,functions' 'npm --prefix functions run test:integration'
     }
     if ($LASTEXITCODE -ne 0) { throw 'Backend integration tests failed.' }
 } finally { Pop-Location }

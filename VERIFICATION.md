@@ -39,3 +39,14 @@ The app now lists 18 named rooms from the official ITD classroom and computer-ro
 ## ITD visual theme update — 2026-09-20
 
 The app now uses the official ITD header wordmark and emblem from the faculty's logo page, the website's navy/white/orange palette, and the Mitr font. The launcher icon uses the official emblem. Auth, Rooms, My Bookings, Account, room details, and reservation states share the updated theme. `flutter analyze --no-pub`, all 22 Flutter tests, and the Android integration flow passed after the theme change. The emulator screenshot is at `artifacts/ibit-theme-preview.png`. The emulator-mode APK is `artifacts/ibit-rooms-itd-debug.apk`.
+
+## Realtime Database migration — 2026-09-20
+
+The local Firestore emulator export was copied into the Realtime Database emulator: 24 rooms, three reservations, and three room-day availability records. The pre-migration export is backed up in `.emulator-data-pre-rtdb`. The app now uses Realtime Database for metadata, availability, and booking history, while accounts remain in Firebase Authentication. Database Rules deny direct writes and private reads by other users. All 11 backend domain tests, nine emulator integration tests, 22 Flutter tests, and `flutter analyze --no-pub` passed. The Android registration → verification → booking → cancellation → simulated Google flow passed on `emulator-5554` using Realtime Database. The debug APK was rebuilt from `lib/main.dart` after that test.
+# Live Firebase Spark setup (2026-09-20)
+
+- Created the default Realtime Database for `ibit-rooms-20260914` in `asia-southeast1`, deployed `database.rules.json`, and seeded all 18 ITD room records. The project remains on the no-cost Spark plan.
+- Firebase Console shows Email/Password and Google as enabled. The registered Android debug SHA-1 and SHA-256 match this computer's debug keystore.
+- Temporary live Email/Password accounts read all 18 room records and their empty owner-scoped booking query. Direct reservation writes and unscoped reservation reads were rejected by the live rules; the temporary accounts were deleted.
+- The cloud APK built successfully and launched on Android emulator `emulator-5554` to the sign-in screen. Real inbox verification and interactive Google account selection have not been tested because they require a user's email/Google account.
+- Cloud booking is intentionally unavailable until the secure callable Functions can be deployed; no billing plan was enabled.

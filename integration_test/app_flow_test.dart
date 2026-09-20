@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -189,22 +189,18 @@ void main() {
       await waitFor(find.text('Space secured.\nIdeas welcome.'));
 
       final uid = FirebaseAuth.instance.currentUser!.uid;
-      final snapshot = await FirebaseFirestore.instance
-          .collection('reservations')
-          .where('userId', isEqualTo: uid)
+      final snapshot = await FirebaseDatabase.instance
+          .ref('appData/reservations')
+          .orderByChild('userId')
+          .equalTo(uid)
           .get();
-      expect(snapshot.docs.length, 1);
-      final booking = snapshot.docs.single;
-      expect(booking['startMinute'], 490);
-      expect(booking['endMinute'], 575);
-      final day = await FirebaseFirestore.instance
-          .collection('roomDays')
-          .doc('3A02_${BookingTime.dateKey(date)}')
-          .get();
-      expect(
-        (day['intervals'] as List).any((i) => i['reservationId'] == booking.id),
-        isTrue,
-      );
+      expect(snapshot.children.length, 1);
+      final booking = snapshot.children.single;
+      expect(booking.child('startMinute').value, 490);
+      expect(booking.child('endMinute').value, 575);
+      final dayPath = 'appData/roomDays/${BookingTime.dateKey(date)}/3A02';
+      final day = await FirebaseDatabase.instance.ref(dayPath).get();
+      expect(day.child('intervals/${booking.key}').exists, isTrue);
 
       await tapText('View my bookings');
       await waitFor(find.text('Confirmed'));
@@ -213,17 +209,15 @@ void main() {
       await waitFor(find.text('Your next idea starts here'));
       await tapText('Cancelled');
       await waitFor(find.text('Android integration project discussion'));
-      final released = await FirebaseFirestore.instance
-          .collection('roomDays')
-          .doc(day.id)
-          .get();
+      final released = await FirebaseDatabase.instance.ref(dayPath).get();
+      expect(released.child('intervals/${booking.key}').exists, isFalse);
       expect(
-        (released['intervals'] as List).any(
-          (i) => i['reservationId'] == booking.id,
-        ),
-        isFalse,
+        (await FirebaseDatabase.instance
+                .ref('appData/reservations/${booking.key}/status')
+                .get())
+            .value,
+        'cancelled',
       );
-      expect((await booking.reference.get())['status'], 'cancelled');
 
       await tapText('Account');
       await tapText('Sign out');

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Room {
   const Room({
     required this.id,
@@ -104,9 +102,7 @@ class Reservation {
       endMinute: (data['endMinute'] as num).toInt(),
       purpose: data['purpose'] as String,
       status: data['status'] as String,
-      createdAt: timestamp is Timestamp
-          ? timestamp.millisecondsSinceEpoch
-          : (timestamp as num?)?.toInt() ?? 0,
+      createdAt: (timestamp as num?)?.toInt() ?? 0,
     );
   }
 }

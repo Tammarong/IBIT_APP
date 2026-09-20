@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/firebase_config.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
@@ -383,7 +384,9 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                           availability: !room.bookingEnabled
                               ? (room.category == 'classroom' ||
                                         room.category == 'computer'
-                                    ? 'Booking setup pending'
+                                    ? (EmulatorConfig.bookingsAvailable
+                                          ? 'Booking setup pending'
+                                          : 'Booking coming soon')
                                     : 'Information only')
                               : !snapshot.hasData || snapshot.hasError
                               ? 'Checking availability'
@@ -406,10 +409,12 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                         ),
                       );
                     }),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.fromLTRB(24, 0, 24, 28),
                       child: Text(
-                        'Room names and photos: official ITD website.\nApp bookings: Monday–Friday · 8 AM–12 PM & 1–4 PM · Bangkok time',
+                        EmulatorConfig.bookingsAvailable
+                            ? 'Room names and photos: official ITD website.\nApp bookings: Monday–Friday · 8 AM–12 PM & 1–4 PM · Bangkok time'
+                            : 'Room names and photos: official ITD website.\nOnline booking is being prepared.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,

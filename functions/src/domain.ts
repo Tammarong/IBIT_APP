@@ -1,5 +1,5 @@
 export type ErrorCode = "invalid-argument" | "unauthenticated" | "permission-denied" |
-  "not-found" | "failed-precondition" | "already-exists";
+  "not-found" | "failed-precondition" | "already-exists" | "unavailable" | "internal";
 
 export class BookingError extends Error {
   constructor(readonly code: ErrorCode, message: string) {

@@ -5,27 +5,25 @@ import {resolve} from "node:path";
 import {randomUUID} from "node:crypto";
 import {initializeApp, deleteApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
-import {getFirestore} from "firebase-admin/firestore";
+import {getDatabase} from "firebase-admin/database";
 import {initializeTestEnvironment, assertFails, assertSucceeds, RulesTestEnvironment} from "@firebase/rules-unit-testing";
-import {collection, doc, getDoc, getDocs, query, setDoc, updateDoc, deleteDoc, where} from "firebase/firestore";
 import {BookingError, BookingInput, startsAt} from "../src/domain";
 import {ReservationService} from "../src/reservations";
 
-process.env.FIRESTORE_EMULATOR_HOST ||= "127.0.0.1:8080";
+process.env.FIREBASE_DATABASE_EMULATOR_HOST ||= "127.0.0.1:9000";
 process.env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9099";
 const projectId = "demo-ibit-reservations";
-const app = initializeApp({projectId}, "integration");
-const db = getFirestore(app);
+const databaseURL = `https://${projectId}-default-rtdb.firebaseio.com`;
+const app = initializeApp({projectId, databaseURL}, "integration");
+const db = getDatabase(app);
 const adminAuth = getAuth(app);
 const service = new ReservationService(db);
 const suffix = randomUUID().replaceAll("-", "");
 const owner = {uid: `test-owner-${suffix}`, emailVerified: true};
 const stranger = {uid: `test-stranger-${suffix}`, emailVerified: true};
-// Keep tests far from ordinary app use, and clean only the records they create.
 const base: BookingInput = {requestId: randomUUID(), roomId: "room-01", date: "2099-03-02",
   startMinute: 490, endMinute: 575, purpose: "Integration test"};
 const ownReservations = new Set<string>();
-const touchedDays = new Set<string>();
 const createdRooms: string[] = [];
 let rules: RulesTestEnvironment;
 let ownerToken: string;
@@ -55,7 +53,6 @@ async function callable(name: string, data: unknown, token?: string) {
 
 async function create(overrides: Partial<BookingInput> = {}, identity = owner) {
   const input = {...base, ...overrides, requestId: overrides.requestId ?? randomUUID()};
-  touchedDays.add(`${input.roomId}_${input.date}`);
   const result = await service.create(input, identity);
   ownReservations.add(result.reservation.id);
   return result.reservation;
@@ -63,40 +60,43 @@ async function create(overrides: Partial<BookingInput> = {}, identity = owner) {
 
 before(async () => {
   for (const roomId of ["room-01", "room-02", "room-03", "room-04", "room-05", "room-06"]) {
-    const ref = db.collection("rooms").doc(roomId);
-    if (!(await ref.get()).exists) {await ref.create({name: `IBIT ${roomId}`}); createdRooms.push(roomId);}
+    const ref = db.ref(`appData/rooms/${roomId}`);
+    if (!(await ref.get()).exists()) {await ref.set({name: `IBIT ${roomId}`}); createdRooms.push(roomId);}
   }
   for (const [roomId, bookingEnabled] of [["5A09", true], ["4A07", false]] as const) {
-    const ref = db.collection("rooms").doc(roomId);
-    if (!(await ref.get()).exists) {await ref.create({name: roomId, bookingEnabled}); createdRooms.push(roomId);}
+    const ref = db.ref(`appData/rooms/${roomId}`);
+    if (!(await ref.get()).exists()) {await ref.set({name: roomId, bookingEnabled}); createdRooms.push(roomId);}
   }
   ownerToken = await login(owner.uid, true);
   unverifiedToken = await login(stranger.uid, false);
-  rules = await initializeTestEnvironment({projectId, firestore: {
-    host: "127.0.0.1", port: 8080, rules: readFileSync(resolve(process.cwd(), "../firestore.rules"), "utf8"),
+  rules = await initializeTestEnvironment({projectId, database: {
+    host: "127.0.0.1", port: 9000,
+    rules: readFileSync(resolve(process.cwd(), "../database.rules.json"), "utf8"),
   }});
 });
 
 after(async () => {
-  // Retain any unrelated reservations in the touched availability documents.
-  for (const id of touchedDays) {
-    const ref = db.collection("roomDays").doc(id);
-    const day = await ref.get();
-    if (!day.exists) continue;
-    const intervals = (day.data()?.intervals ?? []).filter((x: {reservationId: string}) => !ownReservations.has(x.reservationId));
-    if (intervals.length) await ref.update({intervals}); else await ref.delete();
-  }
-  await Promise.all([...ownReservations].map(id => db.collection("reservations").doc(id).delete()));
-  await Promise.all(createdRooms.map(id => db.collection("rooms").doc(id).delete()));
+  // A single cleanup transaction preserves unrelated reservations and intervals.
+  await db.ref("appData").transaction(current => {
+    if (!current) return current;
+    for (const id of ownReservations) {
+      const reservation = current.reservations?.[id];
+      if (!reservation) continue;
+      delete current.reservations[id];
+      const intervals = current.roomDays?.[reservation.date]?.[reservation.roomId]?.intervals;
+      if (intervals) delete intervals[id];
+    }
+    for (const id of createdRooms) delete current.rooms?.[id];
+    return current;
+  }, undefined, false);
   await Promise.all([owner.uid, stranger.uid].map(uid => adminAuth.deleteUser(uid).catch(() => {})));
   await rules?.cleanup();
-  await db.terminate();
+  await db.goOffline();
   await deleteApp(app);
 });
 
 test("callable authentication, verification, booking envelope and cancellation", async () => {
   const input = {...base, roomId: "room-06", requestId: randomUUID()};
-  touchedDays.add(`${input.roomId}_${input.date}`);
   assert.equal((await callable("createReservation", input)).error?.status, "UNAUTHENTICATED");
   assert.equal((await callable("createReservation", input, unverifiedToken)).error?.status, "PERMISSION_DENIED");
   const created = await callable("createReservation", input, ownerToken);
@@ -133,9 +133,9 @@ test("concurrent idempotent retries return one reservation; changed payload is r
 test("adjacent times and different rooms are independently reservable", async () => {
   await create({startMinute: 575, endMinute: 600});
   await create({roomId: "room-03"});
-  const day = await db.collection("roomDays").doc(`${base.roomId}_${base.date}`).get();
-  assert.equal(day.data()?.intervals.length, 2);
-  for (const interval of day.data()?.intervals ?? []) {
+  const day = (await db.ref(`appData/roomDays/${base.date}/${base.roomId}`).get()).val();
+  assert.equal(Object.keys(day.intervals).length, 2);
+  for (const interval of Object.values(day.intervals) as Record<string, unknown>[]) {
     assert.deepEqual(Object.keys(interval).sort(), ["endMinute", "reservationId", "startMinute"]);
   }
 });
@@ -164,27 +164,26 @@ test("server rejects past, weekends, lunch overlaps and unverified users", async
   await assert.rejects(create({}, {...owner, emailVerified: false}), {code: "permission-denied"});
 });
 
-test("Firestore rules enforce private ownership and deny every direct write", async () => {
+test("Realtime Database rules enforce private ownership and deny direct writes", async () => {
   const reservation = await create({roomId: "room-06", startMinute: 800, endMinute: 850});
-  const ownerDb = rules.authenticatedContext(owner.uid).firestore();
-  const otherDb = rules.authenticatedContext(stranger.uid).firestore();
-  const guestDb = rules.unauthenticatedContext().firestore();
-  const reservationPath = `reservations/${reservation.id}`;
-  await assertSucceeds(getDoc(doc(ownerDb, reservationPath)));
-  await assertFails(getDoc(doc(otherDb, reservationPath)));
-  await assertFails(getDoc(doc(guestDb, reservationPath)));
-  await assertSucceeds(getDocs(query(collection(ownerDb, "reservations"), where("userId", "==", owner.uid))));
-  await assertFails(getDocs(collection(ownerDb, "reservations")));
-  await assertFails(getDocs(query(collection(otherDb, "reservations"), where("userId", "==", owner.uid))));
-  await assertSucceeds(getDoc(doc(otherDb, `roomDays/room-06_${base.date}`)));
-  await assertSucceeds(getDoc(doc(ownerDb, "rooms/room-01")));
-  await assertFails(getDoc(doc(guestDb, "rooms/room-01")));
-  await assertFails(getDoc(doc(guestDb, `roomDays/room-06_${base.date}`)));
-  for (const path of [reservationPath, "rooms/room-01", `roomDays/room-06_${base.date}`]) {
-    await assertFails(setDoc(doc(ownerDb, path), {userId: owner.uid}));
-    await assertFails(updateDoc(doc(ownerDb, path), {userId: owner.uid}));
-    await assertFails(deleteDoc(doc(ownerDb, path)));
+  const ownerDb = rules.authenticatedContext(owner.uid).database(databaseURL);
+  const otherDb = rules.authenticatedContext(stranger.uid).database(databaseURL);
+  const guestDb = rules.unauthenticatedContext().database(databaseURL);
+  const reservationPath = `appData/reservations/${reservation.id}`;
+  await assertSucceeds(ownerDb.ref(reservationPath).once("value"));
+  await assertFails(otherDb.ref(reservationPath).once("value"));
+  await assertFails(guestDb.ref(reservationPath).once("value"));
+  await assertSucceeds(ownerDb.ref("appData/reservations").orderByChild("userId").equalTo(owner.uid).once("value"));
+  await assertFails(ownerDb.ref("appData/reservations").once("value"));
+  await assertFails(otherDb.ref("appData/reservations").orderByChild("userId").equalTo(owner.uid).once("value"));
+  await assertSucceeds(otherDb.ref(`appData/roomDays/${base.date}/room-06`).once("value"));
+  await assertSucceeds(ownerDb.ref("appData/rooms/room-01").once("value"));
+  await assertFails(guestDb.ref("appData/rooms/room-01").once("value"));
+  await assertFails(guestDb.ref(`appData/roomDays/${base.date}/room-06`).once("value"));
+  await assertFails(ownerDb.ref("appData").once("value"));
+  for (const path of [reservationPath, "appData/rooms/room-01", `appData/roomDays/${base.date}/room-06`]) {
+    await assertFails(ownerDb.ref(path).set({userId: owner.uid}));
+    await assertFails(ownerDb.ref(path).update({userId: owner.uid}));
+    await assertFails(ownerDb.ref(path).remove());
   }
-  await assertFails(setDoc(doc(ownerDb, "reservations/forged"), {...reservation, userId: owner.uid}));
-  await assertFails(setDoc(doc(ownerDb, "unlisted/forged"), {userId: owner.uid}));
 });

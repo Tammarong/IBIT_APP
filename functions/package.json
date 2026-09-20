@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node --test lib/test/domain.test.js",
-    "test:integration": "npm run build && node --test --test-concurrency=1 lib/test/integration.test.js",
+    "test:unit:compiled": "node --test lib/test/domain.test.js",
+    "test:integration": "node --test --test-concurrency=1 lib/test/integration.test.js",
     "seed": "node scripts/seed.cjs"
   },
   "dependencies": {

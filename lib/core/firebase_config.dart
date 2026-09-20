@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -10,6 +10,12 @@ abstract final class EmulatorConfig {
     defaultValue: 'emulator',
   );
   static const enabled = mode == 'emulator';
+  // Cloud booking remains off on Spark: the reservation callables are not deployed.
+  static const cloudBookingsEnabled = bool.fromEnvironment(
+    'ENABLE_CLOUD_BOOKINGS',
+    defaultValue: false,
+  );
+  static const bookingsAvailable = enabled || cloudBookingsEnabled;
   static const region = 'asia-southeast1';
   static const canSimulateGoogle = kDebugMode && enabled;
   static String get host =>
@@ -32,11 +38,18 @@ abstract final class EmulatorConfig {
     const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
     const appId = String.fromEnvironment('FIREBASE_APP_ID');
     const senderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
+    const databaseUrl = String.fromEnvironment('FIREBASE_DATABASE_URL');
     if (!enabled &&
-        [projectId, apiKey, appId, senderId].any((value) => value.isEmpty)) {
+        [
+          projectId,
+          apiKey,
+          appId,
+          senderId,
+          databaseUrl,
+        ].any((value) => value.isEmpty)) {
       throw StateError(
         'Cloud mode needs FIREBASE_PROJECT_ID, FIREBASE_API_KEY, '
-        'FIREBASE_APP_ID and FIREBASE_MESSAGING_SENDER_ID. See README.md.',
+        'FIREBASE_APP_ID, FIREBASE_MESSAGING_SENDER_ID and FIREBASE_DATABASE_URL. See README.md.',
       );
     }
     await Firebase.initializeApp(
@@ -51,14 +64,14 @@ abstract final class EmulatorConfig {
             ? 'demo-ibit-reservations.firebaseapp.com'
             : '$projectId.firebaseapp.com',
         storageBucket: enabled ? null : '$projectId.firebasestorage.app',
+        databaseURL: enabled
+            ? 'https://demo-ibit-reservations-default-rtdb.firebaseio.com'
+            : databaseUrl,
       ),
     );
     if (enabled) {
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: false,
-      );
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-      FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+      FirebaseDatabase.instance.useDatabaseEmulator(host, 9000);
       FirebaseFunctions.instanceFor(
         region: region,
       ).useFunctionsEmulator(host, 5001);

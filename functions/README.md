@@ -1,6 +1,6 @@
 # IBIT reservation backend
 
-Node.js 22, TypeScript, Firebase Auth, Firestore, and second-generation callable Cloud Functions. All booking times are calendar dates plus minute-of-day in Asia/Bangkok (UTC+07:00). The server clock decides whether a booking has started.
+Node.js 22, TypeScript, Firebase Auth, Realtime Database, and second-generation callable Cloud Functions. All booking times are calendar dates plus minute-of-day in Asia/Bangkok (UTC+07:00). The server clock decides whether a booking has started.
 
 ## Local use
 
@@ -18,11 +18,11 @@ In another terminal:
 .\scripts\test-backend.ps1 -UseRunningEmulators
 ```
 
-The scripts find Android Studio's bundled Java on Windows when it is absent from PATH. Other systems can run `npm --prefix functions run build`, `firebase emulators:start --project demo-ibit-reservations --only auth,firestore,functions`, and `npm --prefix functions run seed` directly. To run the tests with temporary emulators, use `scripts/test-backend.ps1` without the switch. The startup script exports data to `.emulator-data` on graceful shutdown and restores it on the next run. Stop it with Ctrl+C to retain local accounts and reservations.
+The scripts find Android Studio's bundled Java on Windows when it is absent from PATH. Other systems can run `npm --prefix functions run build`, `firebase emulators:start --project demo-ibit-reservations --only auth,database,functions`, and `npm --prefix functions run seed` directly. To run the tests with temporary emulators, use `scripts/test-backend.ps1` without the switch. The startup script exports data to `.emulator-data` on graceful shutdown and restores it on the next run. Stop it with Ctrl+C to retain local accounts and reservations.
 
-Ports: Auth 9099, Firestore 8080, Functions 5001, UI 4000, all bound to `127.0.0.1`. Android's emulator reaches the host through `10.0.2.2`. The development project ID is `demo-ibit-reservations` and the callable region is `asia-southeast1`.
+Ports: Auth 9099, Realtime Database 9000, Functions 5001, UI 4000, all bound to `127.0.0.1`. Android's emulator reaches the host through `10.0.2.2`. The development project ID is `demo-ibit-reservations` and the callable region is `asia-southeast1`.
 
-The seed creates missing documents for the 18 rooms in `assets/rooms/itd_catalog.json`. It retains the older `room-01` through `room-06` demo documents for existing reservation history. Repeating it preserves edited metadata and all reservations. Official room photos load from the ITD website through `imageUrl`. The 13 general classrooms and computer rooms have `bookingEnabled: true`; five specialized rooms have it set to `false`. Auth accounts are created through the app. The emulator console prints local verification and password-reset links.
+The seed creates missing records for the 18 rooms in `assets/rooms/itd_catalog.json`. It retains the older `room-01` through `room-06` demo records for existing reservation history. Repeating it preserves edited metadata and all reservations. Official room photos load from the ITD website through `imageUrl`. The 13 general classrooms and computer rooms have `bookingEnabled: true`; five specialized rooms have it set to `false`. Auth accounts are created through the app. The emulator console prints local verification and password-reset links.
 
 ## Callable contract
 
@@ -38,14 +38,14 @@ A reservation ID is SHA-256 of the authenticated UID plus request ID. A reused r
 
 ## Data and concurrency
 
-- `rooms/{roomId}` stores editable `name`, `officialName`, `category`, `floor`, `sourceUrl`, `subtitle`, `description`, `assetPath`, nullable `imageUrl`, `bookingEnabled`, and `facilities` strings. Capacity is intentionally omitted until supplied by the faculty.
-- `reservations/{id}` stores private reservation details; reads and queries are limited to the owner.
-- `roomDays/{roomId}_{date}` stores `roomId`, `date`, and `intervals: [{ reservationId, startMinute, endMinute }]`. It contains no identity or booking purpose.
+- `appData/rooms/{roomId}` stores editable `name`, `officialName`, `category`, `floor`, `sourceUrl`, `subtitle`, `description`, `assetPath`, `imageUrl`, `bookingEnabled`, and `facilities` strings. Capacity is intentionally omitted until supplied by the faculty.
+- `appData/reservations/{id}` stores private reservation details. Rules require an owner-filtered query or owner access to one record.
+- `appData/roomDays/{date}/{roomId}/intervals/{reservationId}` stores only `reservationId`, `startMinute`, and `endMinute`. It contains no identity or booking purpose.
 
-Every successful create transaction reads and updates the deterministic room/day document and creates its private reservation together. Simultaneous requests for a previously empty day therefore contend on the same document; exactly one overlapping request can commit. Cancellation changes the reservation and removes its interval in a single transaction. Client writes to all three collections are denied. Seed scripts and backend functions use the Admin SDK.
+Every successful create or cancellation transaction updates the private booking and availability together under `appData`. Simultaneous overlapping requests cannot both commit. Client writes are denied by `database.rules.json`; seed scripts and backend functions use the Admin SDK. This single transaction root is suitable for this small faculty pilot; if the booking history grows substantially, shard the transaction root by a bounded period while preserving an owner-readable index.
 
 ## Verification
 
-`npm --prefix functions test` builds and runs the domain tests without emulators. `npm --prefix functions run test:integration` requires all three emulators and tests callable auth/verification, concurrent conflicts, concurrent idempotency, adjacent bookings, different rooms, cancellation, privacy and direct-write denial. Integration tests create temporary users and records in March 2099 and clean those records after completion. They preserve other user reservations and room metadata.
+`npm --prefix functions test` builds and runs the domain tests without emulators. `npm --prefix functions run test:integration` requires all three emulators and tests callable auth/verification, concurrent conflicts, concurrent idempotency, adjacent bookings, different rooms, cancellation, privacy and direct-write denial. Integration tests create temporary users and records in March 2099 and clean those records after completion. They preserve other user reservations and room metadata. Restart running emulators after backend source edits before using `-UseRunningEmulators` so Functions and tests load the same compiled code.
 
-Cloud deployment is intentionally deferred. Use the root setup instructions for a real Firebase project, FlutterFire configuration, providers and Android signing fingerprints. Deployed Cloud Functions require the Firebase Blaze plan. Do not use this emulator-only seed script to populate a production database.
+The previous Firestore emulator export was migrated once to Realtime Database: 24 rooms, three reservations, and three room days. A backup is in `.emulator-data-pre-rtdb`. The guarded `functions/scripts/migrate-firestore-to-rtdb.cjs` script supports the same one-time transfer when both database emulators are running; it refuses to overwrite an existing Realtime Database reservation set. Cloud deployment is deferred. Use the root setup instructions for a real Firebase project, providers and Android signing fingerprints. Deployed Cloud Functions require the Firebase Blaze plan. Do not use the local seed or migration script against production.

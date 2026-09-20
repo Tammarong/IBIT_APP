@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/firebase_config.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
@@ -105,7 +106,9 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
           Notice(
             widget.room.category == 'classroom' ||
                     widget.room.category == 'computer'
-                ? 'This room is listed by ITD. App booking will become available after its Firebase record is configured.'
+                ? (EmulatorConfig.bookingsAvailable
+                      ? 'This room is listed by ITD. App booking will become available after its Firebase record is configured.'
+                      : 'Rooms and sign-in use live Firebase. Online booking is being prepared.')
                 : 'This specialized room is listed for information only and cannot be booked in the app.',
           ),
         ],

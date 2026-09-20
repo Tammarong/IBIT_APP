@@ -36,6 +36,7 @@ migrate_working_dir/
 /functions/lib/
 /.firebase/
 /.emulator-data/
+/.emulator-data-pre-rtdb/
 /artifacts/
 firebase-debug.*
 firestore-debug.*

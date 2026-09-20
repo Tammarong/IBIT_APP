@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';
 
 import '../core/firebase_config.dart';
@@ -32,10 +32,14 @@ class ReservationException implements Exception {
   String toString() => message;
 }
 
+Map<String, dynamic> _asMap(Object? value) => value is Map
+    ? value.map((key, value) => MapEntry(key.toString(), value))
+    : <String, dynamic>{};
+
 class FirebaseRoomRepository implements RoomRepository {
-  FirebaseRoomRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
-  final FirebaseFirestore _firestore;
+  FirebaseRoomRepository({FirebaseDatabase? database})
+    : _database = database ?? FirebaseDatabase.instance;
+  final FirebaseDatabase _database;
   late final Future<List<Map<String, dynamic>>> _catalog = rootBundle
       .loadString('assets/rooms/itd_catalog.json')
       .then(
@@ -47,12 +51,12 @@ class FirebaseRoomRepository implements RoomRepository {
   @override
   Stream<List<Room>> watchRooms() async* {
     final catalog = await _catalog;
-    yield* _firestore.collection('rooms').snapshots().map((snapshot) {
-      final live = {for (final doc in snapshot.docs) doc.id: doc.data()};
+    yield* _database.ref('appData/rooms').onValue.map((event) {
+      final live = _asMap(event.snapshot.value);
       final catalogIds = catalog.map((entry) => entry['id'] as String).toSet();
       final rooms = catalog.map((entry) {
         final id = entry['id'] as String;
-        final configured = live[id];
+        final configured = live[id] == null ? null : _asMap(live[id]);
         return Room.fromMap(id, {
           ...entry,
           'subtitle': 'Floor ${entry['floor']} · ITD, KMUTNB',
@@ -61,16 +65,20 @@ class FirebaseRoomRepository implements RoomRepository {
           ...?configured,
           // A room cannot be reserved until its server-side document exists.
           'bookingEnabled':
+              EmulatorConfig.bookingsAvailable &&
               configured != null &&
               entry['bookingEnabled'] == true &&
               configured['bookingEnabled'] == true,
         });
       }).toList();
       rooms.addAll(
-        snapshot.docs
-            .where((doc) => !catalogIds.contains(doc.id))
+        live.entries
+            .where((entry) => !catalogIds.contains(entry.key))
             .map(
-              (doc) => Room.fromMap(doc.id, {...doc.data(), 'listed': false}),
+              (entry) => Room.fromMap(entry.key, {
+                ..._asMap(entry.value),
+                'listed': false,
+              }),
             ),
       );
       rooms.sort((a, b) => a.name.compareTo(b.name));
@@ -80,20 +88,15 @@ class FirebaseRoomRepository implements RoomRepository {
 
   @override
   Stream<Map<String, List<BusyInterval>>> watchAvailability(String date) =>
-      _firestore
-          .collection('roomDays')
-          .where('date', isEqualTo: date)
-          .snapshots()
+      _database
+          .ref('appData/roomDays/$date')
+          .onValue
           .map(
-            (snapshot) => {
-              for (final doc in snapshot.docs)
-                doc.data()['roomId'] as String:
-                    (doc.data()['intervals'] as List? ?? [])
-                        .map(
-                          (value) => BusyInterval.fromMap(
-                            Map<String, dynamic>.from(value as Map),
-                          ),
-                        )
+            (event) => {
+              for (final entry in _asMap(event.snapshot.value).entries)
+                entry.key:
+                    _asMap(_asMap(entry.value)['intervals']).values
+                        .map((value) => BusyInterval.fromMap(_asMap(value)))
                         .toList()
                       ..sort((a, b) => a.startMinute.compareTo(b.startMinute)),
             },
@@ -102,23 +105,24 @@ class FirebaseRoomRepository implements RoomRepository {
 
 class FirebaseReservationRepository implements ReservationRepository {
   FirebaseReservationRepository({
-    FirebaseFirestore? firestore,
+    FirebaseDatabase? database,
     FirebaseFunctions? functions,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+  }) : _database = database ?? FirebaseDatabase.instance,
        _functions =
            functions ??
            FirebaseFunctions.instanceFor(region: EmulatorConfig.region);
-  final FirebaseFirestore _firestore;
+  final FirebaseDatabase _database;
   final FirebaseFunctions _functions;
 
   @override
-  Stream<List<Reservation>> watchMyReservations(String uid) => _firestore
-      .collection('reservations')
-      .where('userId', isEqualTo: uid)
-      .snapshots()
-      .map((snapshot) {
-        final reservations = snapshot.docs
-            .map((doc) => Reservation.fromMap(doc.id, doc.data()))
+  Stream<List<Reservation>> watchMyReservations(String uid) => _database
+      .ref('appData/reservations')
+      .orderByChild('userId')
+      .equalTo(uid)
+      .onValue
+      .map((event) {
+        final reservations = _asMap(event.snapshot.value).entries
+            .map((entry) => Reservation.fromMap(entry.key, _asMap(entry.value)))
             .toList();
         reservations.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return reservations;
@@ -132,18 +136,33 @@ class FirebaseReservationRepository implements ReservationRepository {
     required int startMinute,
     required int endMinute,
     required String purpose,
-  }) => _call('createReservation', {
-    'requestId': requestId,
-    'roomId': roomId,
-    'date': date,
-    'startMinute': startMinute,
-    'endMinute': endMinute,
-    'purpose': purpose.trim(),
-  });
+  }) {
+    if (!EmulatorConfig.bookingsAvailable) {
+      throw const ReservationException(
+        'Online booking is being prepared. Rooms and sign-in are live, but reservations are not yet available.',
+        'unavailable',
+      );
+    }
+    return _call('createReservation', {
+      'requestId': requestId,
+      'roomId': roomId,
+      'date': date,
+      'startMinute': startMinute,
+      'endMinute': endMinute,
+      'purpose': purpose.trim(),
+    });
+  }
 
   @override
-  Future<Reservation> cancelReservation(String id) =>
-      _call('cancelReservation', {'reservationId': id});
+  Future<Reservation> cancelReservation(String id) {
+    if (!EmulatorConfig.bookingsAvailable) {
+      throw const ReservationException(
+        'Online booking is not available yet.',
+        'unavailable',
+      );
+    }
+    return _call('cancelReservation', {'reservationId': id});
+  }
 
   Future<Reservation> _call(
     String name,

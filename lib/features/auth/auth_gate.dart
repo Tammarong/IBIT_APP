@@ -229,9 +229,13 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _register
-                              ? 'Create an account to reserve your next IBIT room.'
-                              : 'Sign in to find a room and make time for what matters.',
+                          EmulatorConfig.bookingsAvailable
+                              ? (_register
+                                    ? 'Create an account to reserve your next IBIT room.'
+                                    : 'Sign in to find a room and make time for what matters.')
+                              : (_register
+                                    ? 'Create an account to explore ITD rooms with live Firebase.'
+                                    : 'Sign in to explore ITD rooms. Online booking is being prepared.'),
                           style: const TextStyle(
                             color: AppColors.muted,
                             height: 1.5,

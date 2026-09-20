@@ -1,12 +1,14 @@
 import {initializeApp} from "firebase-admin/app";
-import {getFirestore} from "firebase-admin/firestore";
+import {getDatabase} from "firebase-admin/database";
 import {logger} from "firebase-functions";
 import {onCall, HttpsError, CallableRequest} from "firebase-functions/v2/https";
 import {BookingError} from "./domain";
 import {ReservationService} from "./reservations";
 
-initializeApp();
-const service = new ReservationService(getFirestore());
+initializeApp({databaseURL: process.env.FIREBASE_DATABASE_URL ||
+  (process.env.FIREBASE_DATABASE_EMULATOR_HOST ?
+    "https://demo-ibit-reservations-default-rtdb.firebaseio.com" : undefined)});
+const service = new ReservationService(getDatabase());
 const options = {region: "asia-southeast1", maxInstances: 10, timeoutSeconds: 60};
 
 function identity(request: CallableRequest) {
