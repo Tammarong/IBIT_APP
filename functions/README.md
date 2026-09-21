@@ -22,6 +22,8 @@ The scripts find Android Studio's bundled Java on Windows when it is absent from
 
 Ports: Auth 9099, Realtime Database 9000, Functions 5001, UI 4000, all bound to `127.0.0.1`. Android's emulator reaches the host through `10.0.2.2`. The development project ID is `demo-ibit-reservations` and the callable region is `asia-southeast1`.
 
+For the debug-only hybrid mode, `scripts/start-hybrid-functions.ps1` runs **only** the Functions emulator against project `ibit-rooms-20260914`. Authentication and Realtime Database remain live. The script requires local Application Default Credentials for the Firebase project account and checks live room access before listening. `scripts/enable-hybrid-booking.ps1` then turns on the 13 eligible live room flags. The hybrid callables independently verify signed live Firebase ID tokens because the Functions emulator may accept decoded test tokens. This local process is privileged and must remain bound to localhost. No Functions deployment or Blaze upgrade is involved; see the root README for the full commands.
+
 The seed creates missing records for the 18 rooms in `assets/rooms/itd_catalog.json`. It retains the older `room-01` through `room-06` demo records for existing reservation history. Repeating it preserves edited metadata and all reservations. Official room photos load from the ITD website through `imageUrl`. The 13 general classrooms and computer rooms have `bookingEnabled: true`; five specialized rooms have it set to `false`. Auth accounts are created through the app. The emulator console prints local verification and password-reset links.
 
 ## Callable contract

@@ -10,12 +10,13 @@ abstract final class EmulatorConfig {
     defaultValue: 'emulator',
   );
   static const enabled = mode == 'emulator';
+  static const hybrid = mode == 'hybrid';
   // Cloud booking remains off on Spark: the reservation callables are not deployed.
   static const cloudBookingsEnabled = bool.fromEnvironment(
     'ENABLE_CLOUD_BOOKINGS',
     defaultValue: false,
   );
-  static const bookingsAvailable = enabled || cloudBookingsEnabled;
+  static const bookingsAvailable = enabled || hybrid || cloudBookingsEnabled;
   static const region = 'asia-southeast1';
   static const canSimulateGoogle = kDebugMode && enabled;
   static String get host =>
@@ -26,10 +27,10 @@ abstract final class EmulatorConfig {
       : '127.0.0.1';
 
   static Future<void> initialize() async {
-    if (mode != 'emulator' && mode != 'cloud') {
-      throw StateError('FIREBASE_MODE must be emulator or cloud.');
+    if (mode != 'emulator' && mode != 'cloud' && mode != 'hybrid') {
+      throw StateError('FIREBASE_MODE must be emulator, hybrid or cloud.');
     }
-    if (!kDebugMode && enabled) {
+    if (!kDebugMode && (enabled || hybrid)) {
       throw StateError(
         'Release and profile builds require FIREBASE_MODE=cloud.',
       );
@@ -48,7 +49,7 @@ abstract final class EmulatorConfig {
           databaseUrl,
         ].any((value) => value.isEmpty)) {
       throw StateError(
-        'Cloud mode needs FIREBASE_PROJECT_ID, FIREBASE_API_KEY, '
+        'Cloud and hybrid modes need FIREBASE_PROJECT_ID, FIREBASE_API_KEY, '
         'FIREBASE_APP_ID, FIREBASE_MESSAGING_SENDER_ID and FIREBASE_DATABASE_URL. See README.md.',
       );
     }
@@ -72,9 +73,32 @@ abstract final class EmulatorConfig {
     if (enabled) {
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
       FirebaseDatabase.instance.useDatabaseEmulator(host, 9000);
+    }
+    if (enabled || hybrid) {
       FirebaseFunctions.instanceFor(
         region: region,
       ).useFunctionsEmulator(host, 5001);
+    }
+    if (hybrid) {
+      try {
+        final status = await FirebaseFunctions.instanceFor(region: region)
+            .httpsCallable(
+              'bookingServiceStatus',
+              options: HttpsCallableOptions(
+                timeout: const Duration(seconds: 8),
+              ),
+            )
+            .call<Map<String, dynamic>>();
+        if (status.data['ready'] != true) {
+          throw StateError(
+            'Local booking server cannot reach the live database.',
+          );
+        }
+      } catch (_) {
+        throw StateError(
+          'Start scripts/start-hybrid-functions.ps1 before opening the hybrid app.',
+        );
+      }
     }
   }
 }

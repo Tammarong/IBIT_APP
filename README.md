@@ -1,135 +1,131 @@
 # IBIT Rooms
 
-An Android-first Flutter app with the ITD faculty's official room catalog and room reservations. Browse 18 listed spaces, select arbitrary minute-level times for the 13 general classrooms and computer rooms, and manage your own reservations. Teaching-preparation rooms, the server room, and the Pearson VUE exam room are shown for information only.
+IBIT Rooms is an Android Flutter app for viewing 18 ITD faculty rooms and reserving the 13 general classrooms and computer rooms. The five preparation, server, and exam rooms are shown for information only. Reservations use Asia/Bangkok time, Monday–Friday, within **08:00–12:00** or **13:00–16:00**.
 
-The app now has a **live Firebase Spark setup** in project `ibit-rooms-20260914` alongside its local emulator setup. Live Email/Password and Google sign-in are enabled, and the live Realtime Database in Singapore holds the 18 room records. Live booking is currently disabled: the secure reservation Functions cannot be deployed on Spark. No billing plan was enabled.
+## Start from a new Windows computer
 
-## Run with live Firebase (no emulators)
+Follow **Steps 1–4** for the first run. This runs everything locally, including Firebase Authentication, Realtime Database, and booking Functions. It needs **no Firebase account, Firebase Console setup, Google Cloud free trial, or billing**. After it works, choose an optional live mode below.
 
-Start an Android emulator or connect an Android device, then run:
+### 1. Install the tools once
+
+- [Git for Windows](https://git-scm.com/install/windows) to download the project. If you download a ZIP instead, Git is optional.
+- [Flutter SDK](https://docs.flutter.dev/install/quick) **3.44 or newer**. Add Flutter's `bin` folder to PATH; the project requires Dart 3.12.2 or newer.
+- [Android Studio and Android SDK](https://docs.flutter.dev/platform-integration/android/setup). In Android Studio's SDK Manager, install the Android SDK, Command-line Tools, Platform-Tools, and Android Emulator. Create a phone in **Device Manager** with a Google Play system image. Android Studio normally includes the Java runtime used by the project; otherwise install Java 21 or newer.
+- [Node.js 22](https://nodejs.org/en/download) for the local booking Functions. Node installation includes `npm`. Install the [Firebase CLI](https://firebase.google.com/docs/cli) in PowerShell with `npm install -g firebase-tools`.
+
+Open a **new PowerShell window** after installing the tools. Check them:
 
 ```powershell
-.\scripts\run-cloud-android.ps1
+flutter --version
+node --version
+npm --version
+firebase --version
+flutter doctor
+flutter doctor --android-licenses
 ```
 
-If several Android devices are connected, use `-Device <device-id>` from `flutter devices`. This uses the local, git-ignored `firebase.cloud.json` and connects to the live Firebase project. Registration sends a real verification email. Google sign-in uses the real Google provider; the current machine's debug signing SHA-1 and SHA-256 are registered. No Firebase emulator terminal is needed.
+Follow any Android toolchain or license instructions printed by `flutter doctor`. The project is already a Flutter app; open this folder directly in Android Studio or VS Code.
 
-To make a shareable debug APK for this live configuration:
+### 2. Download the project and its dependencies
 
-```powershell
-.\scripts\build-cloud-apk.ps1
-```
-
-Install `artifacts/ibit-rooms-live-debug.apk`. Room browsing and sign-in use live Firebase. The reservation button is intentionally hidden until a secure production booking backend is available; the My Bookings list will be empty for new live accounts. The older `artifacts/ibit-rooms-itd-debug.apk` is an emulator build and still needs local services.
-
-## Run locally on Windows
-
-Requirements: Flutter 3.44 or newer with Dart 3.12, Android Studio/SDK, a running Android emulator, Node.js 22, Firebase CLI, and Java 21. The scripts can find Android Studio’s bundled Java. Check your environment with `flutter doctor`.
-
-Install project dependencies once:
+In PowerShell:
 
 ```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\All_Project" | Out-Null
+Set-Location "$env:USERPROFILE\All_Project"
+git clone https://github.com/Tammarong/IBIT_APP.git
+Set-Location .\IBIT_APP
 flutter pub get
 npm --prefix functions ci
 ```
 
-In terminal 1, start the Firebase services and keep this terminal open:
+If you used **Code → Download ZIP** on GitHub, extract it to a folder, use `Set-Location 'C:\path\to\IBIT_APP'`, then run only the last two dependency commands. In the following steps, open each PowerShell terminal in the folder containing `pubspec.yaml`, `firebase.json`, and `scripts`.
+
+### 3. Start an Android emulator
+
+In Android Studio, open **Device Manager** and press the **Run ▶** button for your virtual phone. Wait until its Android home screen appears. Check the device ID:
+
+```powershell
+flutter devices
+```
+
+Look for a line such as `emulator-5554 • android-x64`. The ID may differ on your computer. You can also use `flutter emulators` to list virtual devices and `flutter emulators --launch YOUR_AVD_ID` to start one. Use the ID from **`flutter devices`** when running the app; an ADB network address such as `127.0.0.1:5557` is usually not the Flutter device ID.
+
+### 4. Run the complete local reservation app
+
+Open **two PowerShell terminals** in the project folder. In **terminal 1**, run this and leave it open until it prints **All emulators ready**:
 
 ```powershell
 .\scripts\start-emulators.ps1
 ```
 
-In terminal 2, launch an Android emulator if needed, then run the app:
+In **terminal 2**, run:
 
 ```powershell
-flutter emulators
-flutter emulators --launch IBIT_Rooms_Test
 .\scripts\run-android.ps1
 ```
 
-`IBIT_Rooms_Test` is the dedicated Android virtual device created on this computer. On another computer, replace it with an AVD name from `flutter emulators`. The run script automatically selects a single connected Android device; when several are connected, use `flutter devices` and pass `-Device <device-id>`. It creates only missing room records and preserves edited room metadata and bookings. Press `Ctrl+C` in the Firebase terminal for a graceful shutdown; its data is exported to `.emulator-data` and restored on the next startup.
-
-The local project is `demo-ibit-reservations`. Open the [Firebase Emulator UI](http://127.0.0.1:4000/database) to inspect Realtime Database room metadata, reservations, and availability. Accounts are under Auth and function logs under Functions. Ports are Auth `9099`, Realtime Database `9000`, Functions `5001`, UI `4000`. The app accesses your computer through `10.0.2.2` on Android emulators.
-
-### Sign in and reserve a room
-
-1. Create an email/password account in the app. No real email is sent in emulator mode. Open the verification link printed in the Firebase terminal, or run `.\scripts\verify-local-email.ps1 -Email 'your-address@example.com'` from the project folder. Then tap **I’ve verified my email** in the app. If the command finds no pending link, tap **Resend verification email** in the app and retry. Password reset links appear in the emulator terminal.
-2. Alternatively, tap **Try simulated Google account** to use a verified local development account immediately.
-3. Choose a weekday and one of the 13 reservable classrooms or computer rooms. Select custom start/end times, enter a purpose, and review the reservation.
-4. Confirm, then open **My Bookings**. Cancel before the start time to release the room.
-
-Bookings run Monday–Friday within **08:00–12:00** or **13:00–16:00**, in **Asia/Bangkok (UTC+7)** regardless of the phone’s timezone. One booking cannot cross lunch. Adjacent reservations are permitted. Past starts, overlapping reservations, invalid dates, and unverified booking attempts are rejected by the server. Date selection currently supports the next ten calendar years.
-
-### Debug APK and physical phones
-
-Build an APK with `flutter build apk --debug --dart-define=FIREBASE_MODE=emulator`. The output is `build/app/outputs/flutter-apk/app-debug.apk`; the current Realtime Database build is copied to `artifacts/ibit-rooms-itd-debug.apk`. It is a local development build and needs the running Firebase emulators. The older `artifacts/ibit-rooms-debug.apk` predates the ITD room catalog.
-
-To use an Android phone connected over USB, keep the Firebase services bound to localhost, forward their ports, and build with the device-local host:
+If Flutter shows more than one Android device, select the ID from `flutter devices`:
 
 ```powershell
-adb reverse tcp:9099 tcp:9099
-adb reverse tcp:9000 tcp:9000
-adb reverse tcp:5001 tcp:5001
-flutter run -d YOUR_DEVICE_ID --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1
+.\scripts\run-android.ps1 -Device emulator-5554
 ```
 
-Profile and release builds refuse emulator mode. Simulated Google credentials are restricted to a compile-time debug-only branch. Debug Android manifests allow local HTTP; the main/release manifest does not enable cleartext traffic.
+The second script adds the room catalog if needed, builds the app, installs it, and opens it on the Android emulator. The **Android emulator is a separate window**; terminal output saying “Installing” does not make that window appear if the virtual device was never started. The first Android build may take several minutes while Gradle downloads dependencies.
 
-## Implementation
-
-- `lib/features`: authentication, room browsing, reservation/review/confirmation, booking history, and account screens.
-- `lib/data`: repository interfaces, Firebase implementations, and models. Controllers use `ChangeNotifier`.
-- `lib/core`: theme, Firebase environment configuration, and shared Bangkok calendar rules.
-- `functions`: TypeScript callable backend and tests; see [backend documentation](functions/README.md).
-- `assets/rooms/itd_catalog.json`: the 18 official room names, categories, floors, photo URLs, source pages, and booking eligibility. Six older demo illustrations remain in `assets/rooms`; their provenance is in [assets/README.md](assets/README.md).
-- `assets/branding`: the official ITD faculty wordmark and emblem, with source details in [branding notes](assets/branding/README.md). The interface uses the website's navy/orange/white palette and bundled Mitr font.
-
-Realtime Database stores `appData/rooms/{roomId}`, private `appData/reservations/{id}`, and shared `appData/roomDays/{date}/{roomId}` availability. Daily availability contains opaque reservation IDs and intervals, never names, email addresses, or purposes. Security Rules permit a user to query only their own reservations. Direct client writes are denied. Firebase Authentication keeps account credentials separately; passwords are never stored in the database.
-
-`createReservation({requestId,roomId,date,startMinute,endMinute,purpose})` and `cancelReservation({reservationId})` return `{reservation}`. The backend derives ownership from the authentication token. A Realtime Database transaction updates the private booking and shared availability together, preventing concurrent first bookings from overlapping. The client retains request IDs for unchanged retries after a lost response. Cancellation atomically releases availability and keeps booking history.
-
-The catalog was transcribed from the official [classroom](https://www.itd.kmutnb.ac.th/class-room.php) and [computer-room](https://www.itd.kmutnb.ac.th/computer-room.php) pages. Room cards load their photos from those pages, so the photos need internet access. The pages do not list capacities, equipment, or individual room-booking policies; those details are not invented. The emulator seed creates 18 room records without overwriting existing metadata or reservations. The older `room-01` through `room-06` demo records are retained for booking history but hidden from the room browser. Realtime Database room metadata can be edited after seeding. For a bookable catalog room, the app enables Reserve only when its database record exists with `bookingEnabled: true` and a booking backend is configured for that build; the callable backend also validates the room ID and this flag.
-
-## Tests
-
-See [VERIFICATION.md](VERIFICATION.md) for the completed checks and Android test environment.
+For the fastest booking test, tap **Try simulated Google account** in the local app. This is a labelled, verified test account. Or register with any test email and run the following from the project folder in another PowerShell terminal after registration:
 
 ```powershell
-flutter analyze
-flutter test
-.\scripts\test-backend.ps1 -UseRunningEmulators
-flutter drive --driver test_driver/integration_test.dart --target integration_test/app_flow_test.dart -d emulator-5554 --no-dds --dart-define=FIREBASE_MODE=emulator
+.\scripts\verify-local-email.ps1 -Email 'your-test-address@example.com'
 ```
 
-The backend script without `-UseRunningEmulators` starts and stops temporary emulators; do not use it while another set occupies the same ports. Backend tests cover booking boundaries, concurrent conflicts, repeated request IDs, cancellation, and Realtime Database access rules. They clean up only their own temporary records. Flutter tests cover date/time rules, auth/verification, preserved form input, network errors, and layouts at 320px width with 200% text.
+Return to the app and tap **I’ve verified my email**. Local mode does **not** send a real email; verification and password-reset links appear in the Firebase terminal. Choose a weekday, open a general classroom or computer room, select start/end times, enter a purpose, and confirm. Open **My Bookings** to see or cancel it before it starts.
 
-The Android integration test drives registration → local email verification → custom 08:10–09:35 reservation → confirmation → My Bookings → cancellation, checks Realtime Database availability, then tests the simulated Google provider with a callable booking. It creates a distinct local email account and cancelled history for inspection. Run the room seed first; this test is restricted to emulator mode.
+Open the [local Firebase Emulator UI](http://127.0.0.1:4000/) to inspect Auth users, `appData/rooms`, `appData/reservations`, and `appData/roomDays`. This is **local data on your computer**, not the Firebase Console. Press `q` in terminal 2 to stop `flutter run`; press `Ctrl+C` in terminal 1 to stop Firebase cleanly and save its state to `.emulator-data` for next time. On later runs, repeat Step 3 and the two commands in Step 4. You do not need to reinstall tools or dependencies each time.
 
-Replace the device ID with the one reported by `flutter devices`. The driver with `--no-dds` avoids the local Dart Development Service startup issue. Rebuild with `flutter build apk --debug --dart-define=FIREBASE_MODE=emulator -t lib/main.dart` after integration testing because the test uses its own app entry point.
+To build a local test APK without launching Flutter, run `flutter build apk --debug --dart-define=FIREBASE_MODE=emulator`. The APK appears at `build/app/outputs/flutter-apk/app-debug.apk`. It still needs the local Firebase emulators running whenever it is used.
 
-Android may log an optional Firebase Installations `FIS_AUTH_ERROR` for the deliberately fake local API key. Authentication, Realtime Database, and booking functions still use the configured emulators; the complete booking flow has been verified with this configuration.
+## Optional: use the live Firebase Console for browsing and sign-in
 
-## Live Firebase configuration and later booking deployment
+The existing project `ibit-rooms-20260914` has live Email/Password and Google providers and an 18-room Realtime Database catalog. Its included `android/app/google-services.json` contains client configuration, **not** administrator credentials. From a fresh checkout, create the ignored local config file and run:
 
-1. The existing [IBIT Rooms project](https://console.firebase.google.com/project/ibit-rooms-20260914/overview) has Android package `com.ibit.rooms`, Email/Password and Google providers, and Realtime Database `ibit-rooms-20260914-default-rtdb` in `asia-southeast1`. Its exact URL is `https://ibit-rooms-20260914-default-rtdb.asia-southeast1.firebasedatabase.app`. Register release signing fingerprints before distribution; obtain them with `android/gradlew.bat -p android signingReport`.
-2. The live [database rules](database.rules.json) were deployed with `firebase deploy --project ibit-rooms-20260914 --only database`. The rules deny direct reservation and availability writes. The 18 rooms were seeded with `.\scripts\seed-cloud-rooms.ps1`; this script preserves existing records on later runs. All live room records have `bookingEnabled: false` until the backend is deployed.
-3. Install and run FlutterFire configuration:
+```powershell
+.\scripts\prepare-cloud-config.ps1
+.\scripts\run-cloud-android.ps1
+```
 
-   ```powershell
-   dart pub global activate flutterfire_cli
-   flutterfire configure --project YOUR_PROJECT_ID --platforms android --android-package-name com.ibit.rooms
-   ```
+Pass `-Device emulator-5554` to the run script if multiple devices are connected. The config generator reads the included Android Firebase file and creates `firebase.cloud.json`; it does not overwrite a different existing config. Email registration sends a **real** verification email. On a new computer, Google sign-in also needs that computer's debug-signing SHA-1 and SHA-256 added to the Android app in Firebase Console; obtain them with `.\android\gradlew.bat -p android signingReport`. The [FlutterFire setup guide](https://firebase.google.com/docs/flutter/setup) explains the Android Firebase configuration.
 
-4. This computer already has `firebase.cloud.json` filled with live client identifiers and the database URL. The file is git-ignored. On another computer, copy `firebase.cloud.example.json` to `firebase.cloud.json` and fill the identifiers. `GOOGLE_SERVER_CLIENT_ID` must be the **Web application OAuth client ID**, not the Android client ID. Firebase client identifiers are configuration, not administrator credentials; never put service-account private keys in the app.
-5. If you later choose the Blaze plan, configure the Functions runtime with the same database URL, deploy the booking Functions, enable the 13 eligible room records, and build with `--dart-define=ENABLE_CLOUD_BOOKINGS=true`:
+This **cloud-only** build can browse rooms and sign in, but its Reserve action is disabled because booking Functions have not been deployed. It does not need a running local Firebase emulator. To build its APK, run `.\scripts\build-cloud-apk.ps1`; the result is `artifacts/ibit-rooms-live-debug.apk`.
 
-   ```powershell
-   firebase deploy --project YOUR_PROJECT_ID --only database,functions
-   flutter run -d YOUR_ANDROID_DEVICE --dart-define-from-file=firebase.cloud.json --dart-define=ENABLE_CLOUD_BOOKINGS=true
-   ```
+## Optional: live accounts and rooms with a local booking server
 
-6. Test real email verification and Google account selection on a Google Play-enabled device. Configure production signing before building a release APK or app bundle; the scaffold currently uses debug signing.
+The **hybrid debug mode** uses live Firebase Authentication and Realtime Database, while only the booking Functions run on your computer. It is intended for testing on an Android emulator attached to that computer. It is not a public booking service. A Google account with administrative access to `ibit-rooms-20260914` is required for the local server to write bookings. The server will refuse to start if those credentials cannot read the live room catalog.
 
-Official setup references: [FlutterFire configuration](https://firebase.google.com/docs/flutter/setup), [Google authentication](https://firebase.google.com/docs/auth/flutter/federated-auth), [Firebase emulators](https://firebase.google.com/docs/emulator-suite/connect_auth), and [Cloud Functions deployment](https://firebase.google.com/docs/functions/get-started).
+1. Run `.\scripts\prepare-cloud-config.ps1`. Install the free [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk), then run `gcloud auth application-default login YOUR_PROJECT_ADMIN_EMAIL --disable-quota-project`. Select the account with access to this Firebase project and grant the requested scope. This local credential setup **does not enable billing**. Ignore a Google Cloud *free-trial* page; it is not part of these steps. Never put credentials or service-account keys in the app or repository.
+2. In **terminal 1**, run `.\scripts\start-hybrid-functions.ps1` and keep it open. It builds Functions, checks live database access, and starts **only** the Functions emulator on port `5001`. Do not also run `start-emulators.ps1` in this mode.
+3. Once the server reports ready, run `.\scripts\enable-hybrid-booking.ps1` **once** in terminal 2. It changes only the `bookingEnabled` flags of the 13 eligible live rooms. If the server is not healthy, this script stops without changing the flags.
+4. Start an Android emulator as in Step 3, then run `.\scripts\run-hybrid-android.ps1` in terminal 2. Pass `-Device YOUR_FLUTTER_DEVICE_ID` if necessary. Live accounts use real email verification or Google sign-in. Booking records and availability will appear in the [live Realtime Database](https://console.firebase.google.com/project/ibit-rooms-20260914/database/ibit-rooms-20260914-default-rtdb/data).
 
-The old live Firestore setup remains separate from this Realtime Database build and receives no bookings from it. Live Authentication, Realtime Database, rules, and room records are configured; booking Functions are still local-only. Cloud Functions deployment requires Blaze billing; the local emulators work without it.
+Build a hybrid debug APK with `.\scripts\build-hybrid-apk.ps1`; the result is `artifacts/ibit-rooms-hybrid-debug.apk`. **Installing the APK alone is not enough**: the local server must be running on this computer when the app opens. The Android emulator reaches it through `10.0.2.2:5001`. Keep port `5001` bound to localhost. Direct app writes to reservations and availability remain denied by `database.rules.json`; the local server independently verifies live Firebase ID tokens.
+
+The project remains on the no-cost Spark plan. Local emulation does not require Blaze; [deploying Cloud Functions does](https://firebase.google.com/docs/functions/get-started). No free-trial or billing activation is needed for the local and hybrid instructions above.
+
+## If something does not start
+
+| What you see | What to check |
+| --- | --- |
+| `No supported devices found` | Start the phone in Android Studio Device Manager, run `flutter devices`, and pass its `emulator-####` ID to `-Device`. |
+| Build/install messages but no phone window | Open Android Studio Device Manager and press **Run ▶** for the virtual phone. |
+| Firebase port `4000`, `5001`, `9000`, or `9099` is taken | Stop the earlier Firebase terminal with `Ctrl+C`, then run only the server script for the mode you selected. |
+| App says the connection is not configured | Local mode needs `start-emulators.ps1`; hybrid mode needs a healthy `start-hybrid-functions.ps1`; cloud mode needs `prepare-cloud-config.ps1`. Then tap **Try again**. |
+| No verification email | Local mode uses `verify-local-email.ps1` or the link printed by the emulator. Live modes send real email; check the inbox/spam folder. |
+| Hybrid server says live database access failed | Check which Google account Application Default Credentials use. It must have access to `ibit-rooms-20260914`; a Google Cloud free trial is **not** required. |
+
+## Tests and project notes
+
+From the project folder, `flutter analyze` and `flutter test` check the app. With emulators stopped, `.\scripts\test-backend.ps1` starts temporary services and runs backend tests; if the full local emulators are already running, use `.\scripts\test-backend.ps1 -UseRunningEmulators`. See [VERIFICATION.md](VERIFICATION.md) and [backend documentation](functions/README.md) for the tested booking rules and concurrency behavior.
+
+The app uses Material 3 and the official ITD logo/theme. The 18 room names and photo URLs come from the ITD [classroom](https://www.itd.kmutnb.ac.th/class-room.php) and [computer-room](https://www.itd.kmutnb.ac.th/computer-room.php) pages. Unknown capacities and equipment are deliberately omitted. Room photos require internet access. Reservation times use whole-minute precision; past times, weekends, lunch crossings, conflicts, and unverified email accounts are rejected by the server. Adjacent bookings are allowed.
+
+Realtime Database separates editable `appData/rooms/{roomId}`, private `appData/reservations/{id}`, and shared `appData/roomDays/{date}/{roomId}` availability. Shared availability contains only opaque IDs and times, not another user's identity or purpose. The backend uses an atomic transaction and idempotent request IDs; cancellation releases availability. The app has no payment, recurring-booking, notification, or administrator dashboard feature.

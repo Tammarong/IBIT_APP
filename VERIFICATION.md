@@ -50,3 +50,10 @@ The local Firestore emulator export was copied into the Realtime Database emulat
 - Temporary live Email/Password accounts read all 18 room records and their empty owner-scoped booking query. Direct reservation writes and unscoped reservation reads were rejected by the live rules; the temporary accounts were deleted.
 - The cloud APK built successfully and launched on Android emulator `emulator-5554` to the sign-in screen. Real inbox verification and interactive Google account selection have not been tested because they require a user's email/Google account.
 - Cloud booking is intentionally unavailable until the secure callable Functions can be deployed; no billing plan was enabled.
+
+## Hybrid live-data/local-Functions build — 2026-09-21
+
+- Added debug-only hybrid configuration: live Firebase Authentication and Realtime Database with only the Functions emulator at `10.0.2.2:5001` on Android. The Functions emulator discovers all three callables for the real project. The app performs a booking-server readiness check before opening.
+- The local service explicitly verifies signed live Firebase ID tokens before changing live data. A forged token that the emulator labelled `VALID` was rejected with HTTP 401 `UNAUTHENTICATED` by this independent check.
+- All 11 backend domain tests, nine fully local emulator integration tests, 22 Flutter tests, and `flutter analyze` passed. The hybrid debug APK built and installed on Android emulator `emulator-5554`. Its missing-server screen displays the correct startup instruction.
+- Live booking has **not** been enabled or end-to-end verified. The current Google Application Default Credentials belong to a different account from the Firebase CLI project account, so the live Admin SDK room-read preflight fails. The guarded enable script refuses to change live room flags until the local server passes that preflight; `3A02/bookingEnabled` remains `false`. No billing/free trial was activated.

@@ -42,6 +42,8 @@ firebase-debug.*
 firestore-debug.*
 ui-debug.*
 firebase.cloud.json
+firebase.hybrid.json
+/functions/.env.ibit-rooms-20260914
 
 # Symbolication related
 app.*.symbols

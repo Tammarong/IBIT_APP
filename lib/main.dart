@@ -56,8 +56,10 @@ class _BootstrapAppState extends State<BootstrapApp> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),
-                      const Text(
-                        'The app connection needs to be configured. Follow the setup instructions included with this build.',
+                      Text(
+                        EmulatorConfig.hybrid
+                            ? 'Start the local booking server on your computer with scripts/start-hybrid-functions.ps1, then tap Try again.'
+                            : 'The app connection needs to be configured. Follow the setup instructions included with this build.',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
