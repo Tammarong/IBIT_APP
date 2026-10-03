@@ -386,7 +386,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               'LOCAL DEVELOPMENT • FIREBASE EMULATORS',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: AppColors.muted,
                                 letterSpacing: 1.1,
                               ),

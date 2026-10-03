@@ -55,6 +55,12 @@ class _ReservationScreenState extends State<ReservationScreen> {
       setState(() {
         if (start) {
           _start = time.hour * 60 + time.minute;
+          if (_end == null || _end! <= _start!) {
+            final sessionEnd = _start! < BookingTime.morningEnd
+                ? BookingTime.morningEnd
+                : BookingTime.afternoonEnd;
+            _end = (_start! + 60).clamp(_start! + 1, sessionEnd).toInt();
+          }
         } else {
           _end = time.hour * 60 + time.minute;
         }
@@ -62,6 +68,40 @@ class _ReservationScreenState extends State<ReservationScreen> {
       });
     }
   }
+
+  List<(int, int)> _suggestedSlots(List<BusyInterval> busy) {
+    List<(int, int)> collect(int duration) {
+      final result = <(int, int)>[];
+      final now = facultyNow();
+      final lower = dayKey(now) == dayKey(_date)
+          ? now.hour * 60 + now.minute + 1
+          : 0;
+      for (final session in const [
+        (BookingTime.morningStart, BookingTime.morningEnd),
+        (BookingTime.afternoonStart, BookingTime.afternoonEnd),
+      ]) {
+        var first = lower > session.$1 ? lower : session.$1;
+        first = ((first + 29) ~/ 30) * 30;
+        for (var start = first; start + duration <= session.$2; start += 30) {
+          final end = start + duration;
+          if (!busy.any((value) => BookingTime.overlaps(start, end, value))) {
+            result.add((start, end));
+            if (result.length == 6) return result;
+          }
+        }
+      }
+      return result;
+    }
+
+    final hourSlots = collect(60);
+    return hourSlots.isNotEmpty ? hourSlots : collect(30);
+  }
+
+  void _selectSlot((int, int) slot) => setState(() {
+    _start = slot.$1;
+    _end = slot.$2;
+    _validationError = null;
+  });
 
   Future<void> _review(List<BusyInterval> busy) async {
     if (!_form.currentState!.validate()) return;
@@ -185,6 +225,9 @@ class _ReservationScreenState extends State<ReservationScreen> {
           stream: _availability,
           builder: (context, snapshot) {
             final busy = snapshot.data?[widget.room.id] ?? <BusyInterval>[];
+            final suggested = snapshot.hasData
+                ? _suggestedSlots(busy)
+                : <(int, int)>[];
             return Form(
               key: _form,
               child: ListView(
@@ -255,8 +298,65 @@ class _ReservationScreenState extends State<ReservationScreen> {
                     label: Text(dateLabel(dayKey(_date))),
                   ),
                   const SizedBox(height: 24),
-                  const Eyebrow('02 / Make room in your day'),
+                  const Eyebrow('02 / Choose a time'),
                   const SizedBox(height: 12),
+                  const Text(
+                    '8 AM–12 PM or 1–4 PM · Bangkok time',
+                    style: TextStyle(fontSize: 13, color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 16),
+                  if (snapshot.hasError)
+                    const Notice(
+                      'We couldn’t load the schedule. Check your connection and reopen this room to try again.',
+                      isError: true,
+                    )
+                  else if (!snapshot.hasData)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    AvailabilityTimeline(intervals: busy, date: dayKey(_date)),
+                  if (snapshot.hasData) ...[
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Suggested available times',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (suggested.isEmpty)
+                      const Text(
+                        'No standard time slots remain. Try another date.',
+                        style: TextStyle(color: AppColors.muted, fontSize: 13),
+                      )
+                    else
+                      SizedBox(
+                        height: 44,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: suggested.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final slot = suggested[index];
+                            return ChoiceChip(
+                              label: Text(
+                                '${timeLabel(slot.$1)}–${timeLabel(slot.$2)}',
+                              ),
+                              selected: _start == slot.$1 && _end == slot.$2,
+                              onSelected: _controller.busy
+                                  ? null
+                                  : (_) => _selectSlot(slot),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                  const SizedBox(height: 22),
+                  const Text(
+                    'Or choose a custom time',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 10),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -277,21 +377,27 @@ class _ReservationScreenState extends State<ReservationScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    '8 AM–12 PM or 1–4 PM · Bangkok time',
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 20),
-                  if (snapshot.hasError)
-                    const Notice(
-                      'We couldn’t load the schedule. Check your connection and reopen this room to try again.',
-                      isError: true,
-                    )
-                  else if (!snapshot.hasData)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    AvailabilityTimeline(intervals: busy, date: dayKey(_date)),
+                  if (_start != null && _end != null && _end! > _start!) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule_rounded,
+                          size: 18,
+                          color: AppColors.available,
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          '${timeLabel(_start!)}–${timeLabel(_end!)} · ${BookingTime.durationLabel(_end! - _start!)}',
+                          style: const TextStyle(
+                            color: AppColors.available,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 28),
                   const Eyebrow('03 / What brings you here?'),
                   const SizedBox(height: 12),
@@ -352,7 +458,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
                   const Text(
                     'Instant confirmation. A little more time for what matters.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: AppColors.muted),
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
                   ),
                 ],
               ),
@@ -390,7 +496,7 @@ class _TimeField extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(color: AppColors.muted, fontSize: 11),
+            style: const TextStyle(color: AppColors.muted, fontSize: 12),
           ),
           const SizedBox(height: 6),
           Text(

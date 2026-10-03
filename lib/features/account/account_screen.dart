@@ -120,7 +120,7 @@ class AccountScreen extends StatelessWidget {
               child: Text(
                 'IBIT ROOMS  /  VERSION 1.0',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   letterSpacing: 1.7,
                   color: AppColors.muted,
                 ),

@@ -44,9 +44,9 @@ class Eyebrow extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     text.toUpperCase(),
     style: TextStyle(
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: FontWeight.w700,
-      letterSpacing: 1.8,
+      letterSpacing: 1.4,
       color: color,
     ),
   );
@@ -275,6 +275,7 @@ class AvailabilityTimeline extends StatelessWidget {
         ? now.hour * 60 + now.minute
         : 0;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
           alignment: WrapAlignment.spaceBetween,
@@ -283,40 +284,120 @@ class AvailabilityTimeline extends StatelessWidget {
           children: [
             Text(
               name,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
             Text(
               '${timeLabel(start)} – ${timeLabel(end)}',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: SizedBox(
-            height: 18,
-            child: Row(
-              children: List.generate(end - start, (offset) {
-                final minute = start + offset;
-                final busy = intervals.any(
-                  (i) => minute >= i.startMinute && minute < i.endMinute,
-                );
-                return Expanded(
-                  child: ColoredBox(
-                    color: minute < pastMinute
-                        ? AppColors.line
-                        : busy
-                        ? const Color(0xFFB6C1CF)
-                        : AppColors.available,
-                    child: const SizedBox.expand(),
-                  ),
-                );
-              }),
+        const SizedBox(height: 10),
+        Semantics(
+          label:
+              '$name availability from ${timeLabel(start)} to ${timeLabel(end)}',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(7),
+            child: SizedBox(
+              height: 22,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _AvailabilityBarPainter(
+                  start: start,
+                  end: end,
+                  pastMinute: pastMinute,
+                  intervals: intervals,
+                ),
+              ),
             ),
           ),
+        ),
+        const SizedBox(height: 7),
+        Row(
+          children: _timeTicks(start, end).asMap().entries.map((entry) {
+            final alignment = switch (entry.key) {
+              0 => TextAlign.start,
+              1 => TextAlign.center,
+              _ => TextAlign.end,
+            };
+            return Expanded(
+              child: Text(
+                timeLabel(entry.value).replaceFirst(':00', ''),
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                softWrap: false,
+                textAlign: alignment,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
   }
+
+  List<int> _timeTicks(int start, int end) {
+    if (end - start <= 180) {
+      return [start, start + (end - start) ~/ 2, end];
+    }
+    return [start, start + 120, end];
+  }
+}
+
+class _AvailabilityBarPainter extends CustomPainter {
+  const _AvailabilityBarPainter({
+    required this.start,
+    required this.end,
+    required this.pastMinute,
+    required this.intervals,
+  });
+
+  final int start;
+  final int end;
+  final int pastMinute;
+  final List<BusyInterval> intervals;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final available = Paint()..color = AppColors.available;
+    canvas.drawRect(Offset.zero & size, available);
+    _drawRange(
+      canvas,
+      size,
+      start,
+      pastMinute.clamp(start, end).toInt(),
+      Paint()..color = AppColors.line,
+    );
+    final reserved = Paint()..color = const Color(0xFF8A97A8);
+    for (final interval in intervals) {
+      _drawRange(
+        canvas,
+        size,
+        interval.startMinute.clamp(start, end).toInt(),
+        interval.endMinute.clamp(start, end).toInt(),
+        reserved,
+      );
+    }
+    final divider = Paint()
+      ..color = Colors.white.withValues(alpha: .6)
+      ..strokeWidth = 1;
+    for (var minute = start + 30; minute < end; minute += 30) {
+      final x = (minute - start) / (end - start) * size.width;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), divider);
+    }
+  }
+
+  void _drawRange(Canvas canvas, Size size, int from, int to, Paint paint) {
+    if (to <= from) return;
+    final left = (from - start) / (end - start) * size.width;
+    final right = (to - start) / (end - start) * size.width;
+    canvas.drawRect(Rect.fromLTRB(left, 0, right, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AvailabilityBarPainter oldDelegate) =>
+      start != oldDelegate.start ||
+      end != oldDelegate.end ||
+      pastMinute != oldDelegate.pastMinute ||
+      intervals != oldDelegate.intervals;
 }

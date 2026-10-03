@@ -99,6 +99,23 @@ class _BookingsScreenState extends State<BookingsScreen> {
     }
   }
 
+  String _upcomingLabel(Reservation booking) {
+    final difference = BookingTime.instant(
+      booking.date,
+      booking.startMinute,
+    ).difference(DateTime.now().toUtc());
+    if (difference.inMinutes < 60) {
+      return 'Starts in ${difference.inMinutes.clamp(1, 59)} min';
+    }
+    if (difference.inHours < 24) {
+      return 'Starts in ${difference.inHours} hr';
+    }
+    if (difference.inDays < 7) {
+      return 'Starts in ${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'}';
+    }
+    return 'Next booking';
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     bottom: false,
@@ -110,15 +127,18 @@ class _BookingsScreenState extends State<BookingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const ItdBrand(section: 'My Bookings', logoHeight: 42),
-                const SizedBox(height: 26),
-                const Eyebrow('A little planning. A lot of possibility.'),
-                const SizedBox(height: 10),
+                const ItdBrand(section: 'My Bookings', logoHeight: 38),
+                const SizedBox(height: 22),
                 Text(
-                  'Your spaces,\nall in one place.',
-                  style: Theme.of(context).textTheme.headlineLarge,
+                  'My bookings',
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 6),
+                const Text(
+                  'Your upcoming and past room reservations.',
+                  style: TextStyle(color: AppColors.muted, fontSize: 14),
+                ),
+                const SizedBox(height: 18),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -231,6 +251,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                     }
                     final started = BookingTime.hasStarted(booking),
                         ended = BookingTime.hasEnded(booking);
+                    final featured = _filter == 0 && index == 0 && !started;
                     final status = booking.isCancelled
                         ? 'Cancelled'
                         : ended
@@ -241,13 +262,40 @@ class _BookingsScreenState extends State<BookingsScreen> {
                     return Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.line),
+                        color: featured ? AppColors.mint : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: featured
+                              ? AppColors.accent.withValues(alpha: .35)
+                              : AppColors.line,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (featured) ...[
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.upcoming_rounded,
+                                  size: 18,
+                                  color: AppColors.accent,
+                                ),
+                                const SizedBox(width: 7),
+                                Expanded(
+                                  child: Text(
+                                    _upcomingLabel(booking),
+                                    style: const TextStyle(
+                                      color: AppColors.accent,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                           Row(
                             children: [
                               if (room != null) ...[
@@ -272,14 +320,31 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      status,
-                                      style: TextStyle(
-                                        color: booking.isCancelled
-                                            ? AppColors.muted
-                                            : AppColors.accent,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 9,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: booking.isCancelled
+                                              ? AppColors.panel
+                                              : AppColors.successTint,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: TextStyle(
+                                            color: booking.isCancelled
+                                                ? AppColors.muted
+                                                : AppColors.available,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -304,6 +369,12 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                 onPressed: _cancelling.contains(booking.id)
                                     ? null
                                     : () => _cancel(booking),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF9C3E28),
+                                  side: const BorderSide(
+                                    color: Color(0xFFE6B8AE),
+                                  ),
+                                ),
                                 child: _cancelling.contains(booking.id)
                                     ? const SizedBox(
                                         width: 18,
@@ -312,7 +383,23 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                    : const Text('Cancel reservation'),
+                                    : const Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 18,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              'Cancel reservation',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                               ),
                             ),
                           ],

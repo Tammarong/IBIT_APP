@@ -217,6 +217,44 @@ void main() {
     },
   );
 
+  testWidgets('suggested time selects a valid one-hour reservation', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      ReservationScreen(
+        room: room,
+        date: DateTime.utc(2027, 1, 4),
+        rooms: TestRooms(),
+        reservations: TestReservations(),
+        onBooked: () {},
+      ),
+    );
+    final suggestion = find.text('8:00 AM–9:00 AM');
+    await tester.scrollUntilVisible(
+      suggestion,
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(suggestion);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('start_time')),
+        matching: find.text('8:00 AM'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('end_time')),
+        matching: find.text('9:00 AM'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('1 hr'), findsOneWidget);
+  });
+
   testWidgets('reservation form remains scrollable with enlarged text', (
     tester,
   ) async {

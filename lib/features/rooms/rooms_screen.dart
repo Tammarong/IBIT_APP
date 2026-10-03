@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/booking_time.dart';
 import '../../core/firebase_config.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
@@ -30,6 +31,7 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
       .watchAvailability(dayKey(_date));
   bool _availableOnly = false;
   String _category = 'all';
+  final _search = TextEditingController();
   @override
   void initState() {
     super.initState();
@@ -39,6 +41,7 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _search.dispose();
     super.dispose();
   }
 
@@ -81,10 +84,40 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
     return false;
   }
 
+  String _availabilityLabel(List<BusyInterval> busy) {
+    final now = facultyNow();
+    final today = dayKey(now) == dayKey(_date);
+    final lower = today ? now.hour * 60 + now.minute + 1 : 0;
+    final sorted = [...busy]
+      ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
+    for (final session in const [
+      (BookingTime.morningStart, BookingTime.morningEnd),
+      (BookingTime.afternoonStart, BookingTime.afternoonEnd),
+    ]) {
+      var start = session.$1 < lower ? lower : session.$1;
+      if (start >= session.$2) continue;
+      for (final interval in sorted.where(
+        (value) =>
+            value.endMinute > session.$1 && value.startMinute < session.$2,
+      )) {
+        if (interval.endMinute <= start) continue;
+        if (interval.startMinute > start) {
+          return '${today && start <= lower ? 'Available now' : 'Available ${timeLabel(start)}'}–${timeLabel(interval.startMinute)}';
+        }
+        start = interval.endMinute > start ? interval.endMinute : start;
+      }
+      if (start < session.$2) {
+        return '${today && start <= lower ? 'Available now' : 'Available ${timeLabel(start)}'}–${timeLabel(session.$2)}';
+      }
+    }
+    return 'Fully booked';
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     bottom: false,
     child: CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
@@ -92,83 +125,21 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const ItdBrand(section: 'IBIT Room Reservations'),
-                const SizedBox(height: 18),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.panel,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'ITD  /  Rooms',
-                    style: TextStyle(color: AppColors.muted, fontSize: 12),
-                  ),
+                const ItdBrand(
+                  section: 'IBIT Room Reservations',
+                  logoHeight: 38,
                 ),
-                const SizedBox(height: 28),
-                const Eyebrow('Your campus. Your space.'),
-                const SizedBox(height: 10),
+                const SizedBox(height: 22),
                 Text(
-                  'Good ideas need\na little room.',
-                  style: Theme.of(context).textTheme.headlineLarge,
+                  'Find your room',
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 const Text(
-                  'Find a space to focus, connect, and create.',
+                  'Choose a date, then find the space that fits your day.',
                   style: TextStyle(color: AppColors.muted, fontSize: 14),
                 ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.ink,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.meeting_room_outlined,
-                          color: AppColors.orange,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'A space for every possibility',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              '18 official spaces · 13 general rooms',
-                              style: TextStyle(
-                                color: Color(0xFFE8EAF0),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 22),
                 Row(
                   children: [
                     const Expanded(child: Eyebrow('When are you coming?')),
@@ -258,43 +229,64 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 14),
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 14),
           sliver: SliverToBoxAdapter(
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Find your room',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                ...[
-                  ('all', 'All'),
-                  ('classroom', 'Classrooms'),
-                  ('computer', 'Computer'),
-                  ('other', 'Other'),
-                ].map(
-                  (option) => ChoiceChip(
-                    label: Text(option.$2),
-                    selected: _category == option.$1,
-                    onSelected: (_) => setState(() => _category = option.$1),
-                    visualDensity: VisualDensity.compact,
+                TextField(
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Search rooms or facilities',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              _search.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
                   ),
                 ),
-                FilterChip(
-                  label: const Text('Available'),
-                  selected: _availableOnly,
-                  onSelected: (value) => setState(() => _availableOnly = value),
-                  showCheckmark: false,
-                  avatar: Icon(
-                    _availableOnly ? Icons.check : Icons.tune,
-                    size: 14,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  side: const BorderSide(color: AppColors.line),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 44,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ...[
+                        ('all', 'All rooms'),
+                        ('classroom', 'Classrooms'),
+                        ('computer', 'Computer rooms'),
+                        ('other', 'Other'),
+                      ].map(
+                        (option) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(option.$2),
+                            selected: _category == option.$1,
+                            onSelected: (_) =>
+                                setState(() => _category = option.$1),
+                          ),
+                        ),
+                      ),
+                      FilterChip(
+                        label: const Text('Available only'),
+                        selected: _availableOnly,
+                        onSelected: (value) =>
+                            setState(() => _availableOnly = value),
+                        showCheckmark: false,
+                        avatar: Icon(
+                          _availableOnly ? Icons.check : Icons.tune,
+                          size: 18,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -339,10 +331,20 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
               key: ValueKey(dayKey(_date)),
               stream: _availability,
               builder: (context, snapshot) {
+                final query = _search.text.trim().toLowerCase();
                 final rooms = roomSnapshot.data!
                     .where(
                       (r) =>
                           r.listed &&
+                          (query.isEmpty ||
+                              r.name.toLowerCase().contains(query) ||
+                              r.subtitle.toLowerCase().contains(query) ||
+                              (r.officialName ?? '').toLowerCase().contains(
+                                query,
+                              ) ||
+                              r.facilities.any(
+                                (value) => value.toLowerCase().contains(query),
+                              )) &&
                           (_category == 'all' ||
                               (_category == 'other'
                                   ? r.category != 'classroom' &&
@@ -356,6 +358,29 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                     .toList();
                 return SliverList.list(
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${rooms.length} ${rooms.length == 1 ? 'room' : 'rooms'} found',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            DateFormat('EEE, d MMM').format(_date),
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     if (snapshot.hasError)
                       const Padding(
                         padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
@@ -366,12 +391,20 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                       ),
                     if (rooms.isEmpty)
                       EmptyState(
-                        title: snapshot.hasData
-                            ? 'A full day of good ideas'
-                            : 'Checking availability',
-                        message: snapshot.hasData
-                            ? 'All rooms are booked for this date. Choose another weekday or turn off the filter.'
-                            : 'Waiting for the latest room schedules.',
+                        title: !snapshot.hasData
+                            ? 'Checking availability'
+                            : query.isNotEmpty ||
+                                  _category != 'all' ||
+                                  _availableOnly
+                            ? 'No matching rooms'
+                            : 'A full day of good ideas',
+                        message: !snapshot.hasData
+                            ? 'Waiting for the latest room schedules.'
+                            : query.isNotEmpty ||
+                                  _category != 'all' ||
+                                  _availableOnly
+                            ? 'Try a different search, category, or availability filter.'
+                            : 'All rooms are booked for this date. Choose another weekday.',
                       ),
                     ...rooms.map((room) {
                       final free =
@@ -391,7 +424,9 @@ class _RoomsScreenState extends State<RoomsScreen> with WidgetsBindingObserver {
                               : !snapshot.hasData || snapshot.hasError
                               ? 'Checking availability'
                               : free
-                              ? 'Space available'
+                              ? _availabilityLabel(
+                                  snapshot.data?[room.id] ?? [],
+                                )
                               : 'Fully booked',
                           available:
                               snapshot.hasData && !snapshot.hasError && free,
@@ -447,100 +482,104 @@ class RoomCard extends StatelessWidget {
   final bool available;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
+  Widget build(BuildContext context) {
+    final type = switch (room.category) {
+      'computer' => 'Computer room',
+      'classroom' => 'Classroom',
+      _ => 'Specialized room',
+    };
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              RoomArtwork(room: room, height: 198),
-              Positioned(
-                left: 16,
-                top: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 11,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.cream.withValues(alpha: .96),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+              SizedBox(width: 112, child: RoomArtwork(room: room, height: 142)),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.circle,
-                        size: 6,
-                        color: available
-                            ? AppColors.available
-                            : AppColors.muted,
-                      ),
-                      const SizedBox(width: 6),
                       Text(
-                        availability,
+                        room.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.3,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        [
+                          type,
+                          if (room.floor != null) 'Floor ${room.floor}',
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Semantics(
+                        label: availability,
+                        child: Row(
+                          children: [
+                            Icon(
+                              available
+                                  ? Icons.check_circle_rounded
+                                  : Icons.info_outline_rounded,
+                              size: 16,
+                              color: available
+                                  ? AppColors.available
+                                  : AppColors.muted,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                availability,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.3,
+                                  fontWeight: FontWeight.w600,
+                                  color: available
+                                      ? AppColors.available
+                                      : AppColors.muted,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
+              const Padding(
+                padding: EdgeInsets.only(right: 10),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.accent,
+                ),
+              ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        room.name,
-                        style: const TextStyle(
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -.6,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        room.subtitle,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: const BoxDecoration(
-                    color: AppColors.mint,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_outward_rounded,
-                    size: 21,
-                    color: AppColors.accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

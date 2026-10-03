@@ -42,7 +42,7 @@ class ItdBrand extends StatelessWidget {
                   section.toUpperCase(),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.8,
                   ),
