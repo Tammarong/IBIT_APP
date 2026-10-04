@@ -115,5 +115,37 @@ void main() {
     expect(BookingTime.formatMinute(780), '1:00 PM');
     expect(BookingTime.durationLabel(85), '1 hr 25 min');
     expect(BookingTime.formatDate('2026-09-14'), 'Mon, 14 September 2026');
+    expect(BookingTime.formatRange(480, 570), '8:00–9:30 AM');
+    expect(BookingTime.formatRange(660, 780), '11:00 AM–1:00 PM');
+    expect(BookingTime.formatRange(780, 960), '1:00–4:00 PM');
+  });
+
+  test('free windows exclude reservations, lunch and elapsed minutes', () {
+    const busy = [
+      BusyInterval(reservationId: 'b', startMinute: 780, endMinute: 840),
+      BusyInterval(reservationId: 'a', startMinute: 540, endMinute: 630),
+    ];
+    // Sunday 13 September 2026 at 07:00 in Bangkok.
+    final sunday = DateTime.utc(2026, 9, 13);
+    expect(BookingTime.freeWindows('2026-09-14', busy, sunday), [
+      (480, 540),
+      (630, 720),
+      (840, 960),
+    ]);
+    expect(BookingTime.freeWindows('2026-09-13', busy, sunday), isEmpty);
+    // Monday at 10:45 Bangkok (03:45 UTC): only future minutes remain.
+    final monday = DateTime.utc(2026, 9, 14, 3, 45);
+    expect(BookingTime.freeWindows('2026-09-14', busy, monday), [
+      (646, 720),
+      (840, 960),
+    ]);
+    expect(BookingTime.freeWindows('2026-09-11', const [], monday), isEmpty);
+    expect(
+      BookingTime.freeWindows('2026-09-14', const [
+        BusyInterval(reservationId: 'x', startMinute: 480, endMinute: 720),
+        BusyInterval(reservationId: 'y', startMinute: 780, endMinute: 960),
+      ], sunday),
+      isEmpty,
+    );
   });
 }

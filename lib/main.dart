@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/firebase_config.dart';
 import 'core/theme.dart';
+import 'widgets/common.dart';
 import 'widgets/itd_brand.dart';
 import 'app.dart';
 
@@ -32,46 +33,42 @@ class _BootstrapAppState extends State<BootstrapApp> {
         home: Scaffold(
           body: SafeArea(
             child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 280,
-                      child: ItdBrand(section: 'IBIT Rooms', logoHeight: 60),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'IBIT Rooms',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    if (snapshot.hasError) ...[
-                      const Text(
-                        'We couldn’t start IBIT Rooms.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        EmulatorConfig.hybrid
-                            ? 'Start the local booking server on your computer with scripts/start-hybrid-functions.ps1, then tap Try again.'
-                            : 'The app connection needs to be configured. Follow the setup instructions included with this build.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      OutlinedButton(
-                        onPressed: () => setState(
-                          () => _initialization = EmulatorConfig.initialize(),
-                        ),
-                        child: const Text('Try again'),
-                      ),
-                    ] else
-                      const CircularProgressIndicator(),
-                  ],
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpace.xxl),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: Builder(
+                    builder: (context) {
+                      final text = Theme.of(context).textTheme;
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const ItdLogo(height: 44),
+                          const SizedBox(height: AppSpace.xl),
+                          Text('IBIT Rooms', style: text.headlineSmall),
+                          const SizedBox(height: AppSpace.lg + 4),
+                          if (snapshot.hasError) ...[
+                            Notice(
+                              EmulatorConfig.hybrid
+                                  ? 'We couldn’t start IBIT Rooms. Start the local booking server on your computer with scripts/start-hybrid-functions.ps1, then tap Try again.'
+                                  : 'We couldn’t start IBIT Rooms. The app connection needs to be configured. Follow the setup instructions included with this build.',
+                              isError: true,
+                            ),
+                            const SizedBox(height: AppSpace.lg + 4),
+                            OutlinedButton.icon(
+                              onPressed: () => setState(
+                                () => _initialization =
+                                    EmulatorConfig.initialize(),
+                              ),
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Try again'),
+                            ),
+                          ] else
+                            const CircularProgressIndicator(),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

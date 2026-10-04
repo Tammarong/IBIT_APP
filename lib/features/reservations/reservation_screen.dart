@@ -6,6 +6,13 @@ import '../../data/repositories.dart';
 import '../../widgets/common.dart';
 import 'reservation_controller.dart';
 
+const _purposeIdeas = [
+  'Group project',
+  'Study session',
+  'Club meeting',
+  'Tutoring',
+];
+
 class ReservationScreen extends StatefulWidget {
   const ReservationScreen({
     super.key,
@@ -31,15 +38,32 @@ class _ReservationScreenState extends State<ReservationScreen> {
   final _purpose = TextEditingController();
   final _form = GlobalKey<FormState>();
   late final _controller = ReservationController(widget.reservations);
-  late Stream<Map<String, List<BusyInterval>>> _availability = widget.rooms
-      .watchAvailability(dayKey(_date));
+
+  /// Availability tagged with its date so a previous day's data is never
+  /// shown while the newly selected day loads.
+  late Stream<(String, Map<String, List<BusyInterval>>)> _availability =
+      _watch();
   String? _validationError;
+
+  Stream<(String, Map<String, List<BusyInterval>>)> _watch() {
+    final date = dayKey(_date);
+    return widget.rooms
+        .watchAvailability(date)
+        .map((availability) => (date, availability));
+  }
+
   @override
   void dispose() {
     _purpose.dispose();
     _controller.dispose();
     super.dispose();
   }
+
+  void _setDate(DateTime date) => setState(() {
+    _date = dateOnly(date);
+    _availability = _watch();
+    _validationError = null;
+  });
 
   Future<void> _pickTime(bool start) async {
     final minute = start
@@ -69,32 +93,21 @@ class _ReservationScreenState extends State<ReservationScreen> {
     }
   }
 
+  /// Up to six free one-hour slots on the half hour (30 minutes if no hour
+  /// is left).
   List<(int, int)> _suggestedSlots(List<BusyInterval> busy) {
-    List<(int, int)> collect(int duration) {
-      final result = <(int, int)>[];
-      final now = facultyNow();
-      final lower = dayKey(now) == dayKey(_date)
-          ? now.hour * 60 + now.minute + 1
-          : 0;
-      for (final session in const [
-        (BookingTime.morningStart, BookingTime.morningEnd),
-        (BookingTime.afternoonStart, BookingTime.afternoonEnd),
-      ]) {
-        var first = lower > session.$1 ? lower : session.$1;
-        first = ((first + 29) ~/ 30) * 30;
-        for (var start = first; start + duration <= session.$2; start += 30) {
-          final end = start + duration;
-          if (!busy.any((value) => BookingTime.overlaps(start, end, value))) {
-            result.add((start, end));
-            if (result.length == 6) return result;
-          }
-        }
-      }
-      return result;
-    }
-
-    final hourSlots = collect(60);
-    return hourSlots.isNotEmpty ? hourSlots : collect(30);
+    final windows = BookingTime.freeWindows(dayKey(_date), busy);
+    List<(int, int)> collect(int duration) => [
+      for (final (from, to) in windows)
+        for (
+          var start = (from + 29) ~/ 30 * 30;
+          start + duration <= to;
+          start += 30
+        )
+          (start, start + duration),
+    ].take(6).toList();
+    final hours = collect(60);
+    return hours.isNotEmpty ? hours : collect(30);
   }
 
   void _selectSlot((int, int) slot) => setState(() {
@@ -103,22 +116,41 @@ class _ReservationScreenState extends State<ReservationScreen> {
     _validationError = null;
   });
 
+  bool get _retrying =>
+      _start != null &&
+      _end != null &&
+      _controller.isRetryOf(
+        roomId: widget.room.id,
+        date: dayKey(_date),
+        startMinute: _start!,
+        endMinute: _end!,
+        purpose: _purpose.text.trim(),
+      );
+
+  /// The one problem to show beside the primary action, if any.
+  String? _issue(List<BusyInterval> busy) {
+    if (_validationError != null) return _validationError;
+    // A lost response can leave our own reservation on the availability
+    // timeline. Let the server resolve an identical retry by its request ID.
+    if (_start != null && _end != null && !_retrying) {
+      final issue = BookingTime.validate(
+        date: dayKey(_date),
+        startMinute: _start!,
+        endMinute: _end!,
+        busy: busy,
+      );
+      if (issue != null) return issue;
+    }
+    return _controller.error;
+  }
+
   Future<void> _review(List<BusyInterval> busy) async {
     if (!_form.currentState!.validate()) return;
     if (_start == null || _end == null) {
       setState(() => _validationError = 'Choose a start time and an end time.');
       return;
     }
-    final retrying = _controller.isRetryOf(
-      roomId: widget.room.id,
-      date: dayKey(_date),
-      startMinute: _start!,
-      endMinute: _end!,
-      purpose: _purpose.text.trim(),
-    );
-    // A lost response can leave our own reservation on the availability timeline.
-    // Let the server resolve an identical retry by its original request ID.
-    final error = retrying
+    final error = _retrying
         ? null
         : BookingTime.validate(
             date: dayKey(_date),
@@ -135,59 +167,12 @@ class _ReservationScreenState extends State<ReservationScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: AppColors.cream,
-      builder: (context) => SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.line,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Eyebrow('One last look'),
-              const SizedBox(height: 8),
-              Text(
-                'Your room is almost yours.',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 24),
-              DetailLine('Room', widget.room.name),
-              DetailLine('Date', dateLabel(dayKey(_date))),
-              DetailLine('Time', '${timeLabel(_start!)} – ${timeLabel(_end!)}'),
-              DetailLine('Purpose', _purpose.text.trim()),
-              const SizedBox(height: 16),
-              const Notice(
-                'Your reservation will be confirmed immediately. You can cancel any time before it starts.',
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const Key('confirm_reservation'),
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Confirm reservation'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Back to editing'),
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (context) => _ReviewSheet(
+        room: widget.room,
+        date: dayKey(_date),
+        start: _start!,
+        end: _end!,
+        purpose: _purpose.text.trim(),
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -214,260 +199,304 @@ class _ReservationScreenState extends State<ReservationScreen> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: _controller,
-    builder: (context, _) => PopScope(
-      canPop: !_controller.busy,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Reserve a room', style: TextStyle(fontSize: 16)),
-        ),
-        body: StreamBuilder<Map<String, List<BusyInterval>>>(
-          key: ValueKey(dayKey(_date)),
+    builder: (context, _) =>
+        StreamBuilder<(String, Map<String, List<BusyInterval>>)>(
           stream: _availability,
           builder: (context, snapshot) {
-            final busy = snapshot.data?[widget.room.id] ?? <BusyInterval>[];
-            final suggested = snapshot.hasData
-                ? _suggestedSlots(busy)
-                : <(int, int)>[];
-            return Form(
-              key: _form,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-                children: [
-                  Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: SizedBox(
-                          width: 86,
-                          child: RoomArtwork(room: widget.room, height: 82),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Eyebrow('Your chosen space'),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.room.name,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            Text(
-                              widget.room.subtitle,
-                              style: const TextStyle(
-                                color: AppColors.muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Make it your time.',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'A quick catch-up or a deep-work session.\nChoose the time that works for you.',
-                    style: TextStyle(color: AppColors.muted, height: 1.6),
-                  ),
-                  const SizedBox(height: 24),
-                  const Eyebrow('01 / Choose a date'),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    key: const Key('reservation_date'),
-                    onPressed: _controller.busy
-                        ? null
-                        : () async {
-                            final date = await pickBookingDate(context, _date);
-                            if (date != null && mounted) {
-                              setState(() {
-                                _date = dateOnly(date);
-                                _availability = widget.rooms.watchAvailability(
-                                  dayKey(_date),
-                                );
-                                _validationError = null;
-                              });
-                            }
-                          },
-                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    label: Text(dateLabel(dayKey(_date))),
-                  ),
-                  const SizedBox(height: 24),
-                  const Eyebrow('02 / Choose a time'),
-                  const SizedBox(height: 12),
-                  const Text(
-                    '8 AM–12 PM or 1–4 PM · Bangkok time',
-                    style: TextStyle(fontSize: 13, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 16),
-                  if (snapshot.hasError)
-                    const Notice(
-                      'We couldn’t load the schedule. Check your connection and reopen this room to try again.',
-                      isError: true,
-                    )
-                  else if (!snapshot.hasData)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    AvailabilityTimeline(intervals: busy, date: dayKey(_date)),
-                  if (snapshot.hasData) ...[
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Suggested available times',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (suggested.isEmpty)
-                      const Text(
-                        'No standard time slots remain. Try another date.',
-                        style: TextStyle(color: AppColors.muted, fontSize: 13),
-                      )
-                    else
-                      SizedBox(
-                        height: 44,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: suggested.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final slot = suggested[index];
-                            return ChoiceChip(
-                              label: Text(
-                                '${timeLabel(slot.$1)}–${timeLabel(slot.$2)}',
-                              ),
-                              selected: _start == slot.$1 && _end == slot.$2,
-                              onSelected: _controller.busy
-                                  ? null
-                                  : (_) => _selectSlot(slot),
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                  const SizedBox(height: 22),
-                  const Text(
-                    'Or choose a custom time',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _TimeField(
-                        label: 'Start time',
-                        value: _start == null
-                            ? 'Select time'
-                            : timeLabel(_start!),
-                        onTap: _controller.busy ? null : () => _pickTime(true),
-                        fieldKey: const Key('start_time'),
-                      ),
-                      _TimeField(
-                        label: 'End time',
-                        value: _end == null ? 'Select time' : timeLabel(_end!),
-                        onTap: _controller.busy ? null : () => _pickTime(false),
-                        fieldKey: const Key('end_time'),
-                      ),
-                    ],
-                  ),
-                  if (_start != null && _end != null && _end! > _start!) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.schedule_rounded,
-                          size: 18,
-                          color: AppColors.available,
-                        ),
-                        const SizedBox(width: 7),
-                        Text(
-                          '${timeLabel(_start!)}–${timeLabel(_end!)} · ${BookingTime.durationLabel(_end! - _start!)}',
-                          style: const TextStyle(
-                            color: AppColors.available,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 28),
-                  const Eyebrow('03 / What brings you here?'),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    key: const Key('booking_purpose'),
-                    controller: _purpose,
-                    enabled: !_controller.busy,
-                    maxLength: 500,
-                    minLines: 2,
-                    maxLines: 4,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Booking purpose',
-                      hintText: 'e.g. Final-year project discussion',
-                    ),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Add a short purpose for your reservation.'
-                        : null,
-                  ),
-                  if (_validationError != null ||
-                      _controller.error != null) ...[
-                    const SizedBox(height: 12),
-                    Notice(
-                      _validationError ?? _controller.error!,
-                      isError: true,
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    key: const Key('review_reservation'),
-                    onPressed:
-                        _controller.busy ||
-                            !snapshot.hasData ||
-                            snapshot.hasError
-                        ? null
-                        : () => _review(busy),
-                    child: _controller.busy
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  'Review reservation',
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Icon(Icons.arrow_forward_rounded, size: 18),
-                            ],
-                          ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Instant confirmation. A little more time for what matters.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                ],
+            final loaded =
+                !snapshot.hasError && snapshot.data?.$1 == dayKey(_date);
+            final busy = loaded
+                ? snapshot.data!.$2[widget.room.id] ?? <BusyInterval>[]
+                : <BusyInterval>[];
+            return PopScope(
+              canPop: !_controller.busy,
+              child: Scaffold(
+                appBar: AppBar(title: const Text('Reserve a room')),
+                body: _body(context, snapshot.hasError, loaded, busy),
+                bottomNavigationBar: _actionBar(context, loaded, busy),
               ),
             );
           },
         ),
-      ),
-    ),
   );
+
+  Widget _body(
+    BuildContext context,
+    bool failed,
+    bool loaded,
+    List<BusyInterval> busy,
+  ) {
+    final text = Theme.of(context).textTheme;
+    final locked = _controller.busy;
+    final hasRange = _start != null && _end != null && _end! > _start!;
+    final suggested = loaded ? _suggestedSlots(busy) : <(int, int)>[];
+    return Form(
+      key: _form,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.gutter,
+          AppSpace.xs,
+          AppSpace.gutter,
+          AppSpace.xl,
+        ),
+        children: [
+          SurfaceCard(
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: RoomArtwork(room: widget.room, width: 64, height: 64),
+                ),
+                const SizedBox(width: AppSpace.md + 2),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.room.name, style: text.titleMedium),
+                      Text(
+                        widget.room.subtitle,
+                        style: text.bodySmall!.copyWith(color: AppColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.xl),
+          const SectionHeader('Date', step: 1),
+          const SizedBox(height: AppSpace.md),
+          DayStepper(
+            date: _date,
+            onChanged: _setDate,
+            pickerKey: const Key('reservation_date'),
+            enabled: !locked,
+          ),
+          const SizedBox(height: AppSpace.xxl - 4),
+          const SectionHeader(
+            'Time',
+            step: 2,
+            subtitle: '8:00 AM–12:00 PM or 1:00–4:00 PM · Bangkok time',
+          ),
+          const SizedBox(height: AppSpace.lg),
+          if (failed)
+            const Notice(
+              'We couldn’t load the schedule. Check your connection and reopen this room to try again.',
+              isError: true,
+            )
+          else if (!loaded)
+            const Padding(
+              padding: EdgeInsets.all(AppSpace.xl),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            AvailabilityTimeline(
+              intervals: busy,
+              date: dayKey(_date),
+              selection: hasRange ? (_start!, _end!) : null,
+              showFreeTimes: false,
+            ),
+            const SizedBox(height: AppSpace.lg + 4),
+            Text('Suggested times', style: text.titleSmall),
+            const SizedBox(height: AppSpace.sm),
+            if (suggested.isEmpty)
+              Text(
+                'No free time slots remain on this day. Try another weekday.',
+                style: text.bodyMedium!.copyWith(color: AppColors.muted),
+              )
+            else
+              Wrap(
+                spacing: AppSpace.sm,
+                runSpacing: AppSpace.sm,
+                children: [
+                  for (final slot in suggested)
+                    ChoiceChip(
+                      label: Text(rangeLabel(slot.$1, slot.$2)),
+                      selected: _start == slot.$1 && _end == slot.$2,
+                      onSelected: locked ? null : (_) => _selectSlot(slot),
+                    ),
+                ],
+              ),
+          ],
+          const SizedBox(height: AppSpace.lg + 4),
+          Text('Or set exact times', style: text.titleSmall),
+          const SizedBox(height: AppSpace.sm),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final start = _TimeField(
+                label: 'Start time',
+                value: _start == null ? null : timeLabel(_start!),
+                onTap: locked ? null : () => _pickTime(true),
+                fieldKey: const Key('start_time'),
+              );
+              final end = _TimeField(
+                label: 'End time',
+                value: _end == null ? null : timeLabel(_end!),
+                onTap: locked ? null : () => _pickTime(false),
+                fieldKey: const Key('end_time'),
+              );
+              final stacked =
+                  constraints.maxWidth /
+                      MediaQuery.textScalerOf(context).scale(1) <
+                  280;
+              return stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        start,
+                        const SizedBox(height: AppSpace.md),
+                        end,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: start),
+                        const SizedBox(width: AppSpace.md),
+                        Expanded(child: end),
+                      ],
+                    );
+            },
+          ),
+          const SizedBox(height: AppSpace.xxl - 4),
+          const SectionHeader(
+            'Purpose',
+            step: 3,
+            subtitle: 'A short note about how you’ll use the room.',
+          ),
+          const SizedBox(height: AppSpace.md),
+          TextFormField(
+            key: const Key('booking_purpose'),
+            controller: _purpose,
+            enabled: !locked,
+            maxLength: 500,
+            minLines: 2,
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            buildCounter:
+                (
+                  context, {
+                  required currentLength,
+                  required isFocused,
+                  maxLength,
+                }) => currentLength > 400
+                ? Text('$currentLength/$maxLength')
+                : null,
+            decoration: const InputDecoration(
+              labelText: 'Booking purpose',
+              hintText: 'e.g. Final-year project discussion',
+              alignLabelWithHint: true,
+            ),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Add a short purpose for your reservation.'
+                : null,
+          ),
+          const SizedBox(height: AppSpace.md),
+          Wrap(
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.sm,
+            children: [
+              for (final idea in _purposeIdeas)
+                ActionChip(
+                  label: Text(idea),
+                  onPressed: locked
+                      ? null
+                      : () => setState(() {
+                          _purpose.text = idea;
+                          _purpose.selection = TextSelection.collapsed(
+                            offset: idea.length,
+                          );
+                        }),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionBar(
+    BuildContext context,
+    bool loaded,
+    List<BusyInterval> busy,
+  ) {
+    final text = Theme.of(context).textTheme;
+    final issue = _issue(busy);
+    final ready = _start != null && _end != null && issue == null;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.line)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.gutter,
+            AppSpace.md,
+            AppSpace.gutter,
+            AppSpace.md,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (issue != null) ...[
+                Notice(issue, isError: true),
+                const SizedBox(height: AppSpace.md - 2),
+              ] else if (ready) ...[
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.event_available_rounded,
+                      size: 20,
+                      color: AppColors.available,
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      child: Text(
+                        '${relativeDayLabel(_date)} · ${rangeLabel(_start!, _end!)} · '
+                        '${BookingTime.durationLabel(_end! - _start!)}',
+                        style: text.titleSmall,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md - 2),
+              ],
+              FilledButton(
+                key: const Key('review_reservation'),
+                onPressed: _controller.busy || !loaded
+                    ? null
+                    : () => _review(busy),
+                child: _controller.busy
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.muted,
+                        ),
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Review reservation',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          SizedBox(width: AppSpace.sm + 2),
+                          Icon(Icons.arrow_forward_rounded, size: 18),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _TimeField extends StatelessWidget {
@@ -477,40 +506,140 @@ class _TimeField extends StatelessWidget {
     required this.onTap,
     required this.fieldKey,
   });
-  final String label, value;
+  final String label;
+  final String? value;
   final VoidCallback? onTap;
   final Key fieldKey;
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: (MediaQuery.sizeOf(context).width - 60) / 2,
-    child: OutlinedButton(
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return OutlinedButton(
       key: fieldKey,
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        backgroundColor: Colors.white,
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
         alignment: Alignment.centerLeft,
+        side: BorderSide(
+          color: value == null ? AppColors.line : AppColors.ink,
+          width: value == null ? 1 : 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: text.bodySmall!.copyWith(color: AppColors.muted),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value ?? 'Select time',
+                  style: text.titleMedium!.copyWith(
+                    color: value == null ? AppColors.muted : AppColors.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.schedule_rounded, size: 20, color: AppColors.muted),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewSheet extends StatelessWidget {
+  const _ReviewSheet({
+    required this.room,
+    required this.date,
+    required this.start,
+    required this.end,
+    required this.purpose,
+  });
+  final Room room;
+  final String date;
+  final int start, end;
+  final String purpose;
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.gutter,
+        0,
+        AppSpace.gutter,
+        AppSpace.xl,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text('Review your reservation', style: text.headlineSmall),
+          const SizedBox(height: AppSpace.xs),
           Text(
-            label,
-            style: const TextStyle(color: AppColors.muted, fontSize: 12),
+            'Check the details, then confirm.',
+            style: text.bodyMedium!.copyWith(color: AppColors.muted),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
+          const SizedBox(height: AppSpace.lg + 4),
+          SurfaceCard(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: RoomArtwork(room: room, width: 52, height: 52),
+                    ),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(room.name, style: text.titleMedium),
+                          Text(
+                            room.subtitle,
+                            style: text.bodySmall!.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md),
+                const Divider(),
+                const SizedBox(height: AppSpace.xs),
+                DetailLine('Date', dateLabel(date)),
+                DetailLine('Time', rangeLabel(start, end)),
+                DetailLine('Duration', BookingTime.durationLabel(end - start)),
+                DetailLine('Purpose', purpose),
+              ],
             ),
+          ),
+          const SizedBox(height: AppSpace.lg),
+          const Notice(
+            'Confirmed instantly. You can cancel any time before it starts.',
+            tone: NoticeTone.success,
+          ),
+          const SizedBox(height: AppSpace.lg + 4),
+          FilledButton(
+            key: const Key('confirm_reservation'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm reservation'),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Back to editing'),
           ),
         ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 class ReservationSuccessScreen extends StatelessWidget {
@@ -524,89 +653,104 @@ class ReservationSuccessScreen extends StatelessWidget {
   final Reservation reservation;
   final VoidCallback onBooked;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(automaticallyImplyLeading: false),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-        children: [
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(26),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.successTint,
-              ),
-              child: const Icon(
-                Icons.check_rounded,
-                color: AppColors.available,
-                size: 48,
-              ),
-            ),
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.gutter,
+            AppSpace.xxl,
+            AppSpace.gutter,
+            AppSpace.xxl,
           ),
-          const SizedBox(height: 24),
-          const Center(child: Eyebrow('You’re all set')),
-          const SizedBox(height: 12),
-          Text(
-            'Space secured.\nIdeas welcome.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Your reservation is confirmed.\nWe’ll leave the good ideas to you.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.muted, height: 1.6),
-          ),
-          const SizedBox(height: 28),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                RoomArtwork(room: room, height: 160),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Text(
-                        room.name,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 16),
-                      DetailLine('Date', dateLabel(reservation.date)),
-                      DetailLine(
-                        'Time',
-                        '${timeLabel(reservation.startMinute)} – ${timeLabel(reservation.endMinute)}',
-                      ),
-                      const Divider(),
-                      DetailLine('Reference', reservation.reference),
-                    ],
-                  ),
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(22),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.availableTint,
                 ),
-              ],
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: AppColors.available,
+                  size: 44,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 28),
-          FilledButton(
-            key: const Key('view_bookings'),
-            onPressed: () {
-              onBooked();
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
-            child: const Text('View my bookings'),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () =>
-                Navigator.of(context).popUntil((route) => route.isFirst),
-            child: const Text('Explore more rooms'),
-          ),
-        ],
+            const SizedBox(height: AppSpace.lg + 4),
+            Semantics(
+              header: true,
+              liveRegion: true,
+              child: Text(
+                'Reservation confirmed',
+                textAlign: TextAlign.center,
+                style: text.headlineMedium,
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              'The room is yours. If your plans change, cancel from My bookings before it starts.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium!.copyWith(color: AppColors.muted),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            SurfaceCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  RoomArtwork(room: room, height: 140),
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpace.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(room.name, style: text.titleLarge),
+                        const SizedBox(height: AppSpace.sm),
+                        DetailLine('Date', dateLabel(reservation.date)),
+                        DetailLine(
+                          'Time',
+                          rangeLabel(
+                            reservation.startMinute,
+                            reservation.endMinute,
+                          ),
+                        ),
+                        DetailLine(
+                          'Duration',
+                          BookingTime.durationLabel(
+                            reservation.endMinute - reservation.startMinute,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.xs),
+                        const Divider(),
+                        const SizedBox(height: AppSpace.xs),
+                        DetailLine('Reference', reservation.reference),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.xl),
+            FilledButton(
+              key: const Key('view_bookings'),
+              onPressed: () {
+                onBooked();
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              child: const Text('View my bookings'),
+            ),
+            const SizedBox(height: AppSpace.xs),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).popUntil((route) => route.isFirst),
+              child: const Text('Explore more rooms'),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../core/firebase_config.dart';
 import '../../core/theme.dart';
 import '../../core/booking_time.dart';
@@ -7,6 +8,21 @@ import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../widgets/common.dart';
 import '../../widgets/itd_brand.dart';
+
+enum _Filter {
+  upcoming('Upcoming'),
+  past('Past'),
+  cancelled('Cancelled');
+
+  const _Filter(this.label);
+  final String label;
+
+  bool includes(Reservation booking) => switch (this) {
+    _Filter.cancelled => booking.isCancelled,
+    _Filter.past => !booking.isCancelled && BookingTime.hasEnded(booking),
+    _Filter.upcoming => !booking.isCancelled && !BookingTime.hasEnded(booking),
+  };
+}
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({
@@ -25,7 +41,7 @@ class BookingsScreen extends StatefulWidget {
 }
 
 class _BookingsScreenState extends State<BookingsScreen> {
-  int _filter = 0;
+  _Filter _filter = _Filter.upcoming;
   late Stream<List<Reservation>> _bookings = widget.reservations
       .watchMyReservations(widget.uid);
   late final _rooms = widget.rooms.watchRooms();
@@ -45,13 +61,16 @@ class _BookingsScreenState extends State<BookingsScreen> {
     super.dispose();
   }
 
-  Future<void> _cancel(Reservation booking) async {
+  Future<void> _cancel(Reservation booking, String roomName) async {
     final answer = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Release this room?'),
-        content: const Text(
-          'Your reservation will be cancelled and the time will become available to the IBIT community.',
+        icon: const Icon(Icons.event_busy_rounded, color: AppColors.danger),
+        title: const Text('Cancel this booking?'),
+        content: Text(
+          '$roomName · ${dateLabel(booking.date)} · '
+          '${rangeLabel(booking.startMinute, booking.endMinute)}\n\n'
+          'The time becomes available to others right away.',
         ),
         actions: [
           TextButton(
@@ -59,6 +78,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
             child: const Text('Keep booking'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Cancel booking'),
           ),
@@ -67,39 +87,262 @@ class _BookingsScreenState extends State<BookingsScreen> {
     );
     if (answer != true || !mounted) return;
     setState(() => _cancelling.add(booking.id));
-    try {
-      await widget.reservations.cancelReservation(booking.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Reservation cancelled. The room is available again.',
-            ),
-          ),
-        );
-      }
-    } on ReservationException catch (error) {
+    void tell(String message) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
+    }
+
+    try {
+      await widget.reservations.cancelReservation(booking.id);
+      tell('Booking cancelled. The room is available again.');
+    } on ReservationException catch (error) {
+      tell(error.message);
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not cancel. Check your connection and try again.',
-            ),
-          ),
-        );
-      }
+      tell('Couldn’t cancel. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _cancelling.remove(booking.id));
     }
   }
 
-  String _upcomingLabel(Reservation booking) {
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    bottom: false,
+    child: StreamBuilder<List<Room>>(
+      stream: _rooms,
+      builder: (context, roomSnapshot) => StreamBuilder<List<Reservation>>(
+        stream: _bookings,
+        builder: (context, snapshot) {
+          final all = snapshot.data ?? const <Reservation>[];
+          final rooms = {
+            for (final room in roomSnapshot.data ?? const <Room>[])
+              room.id: room,
+          };
+          return CustomScrollView(
+            slivers: [
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpace.gutter,
+                  AppSpace.lg,
+                  AppSpace.gutter,
+                  0,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: ScreenHeader(
+                    title: 'My bookings',
+                    subtitle: 'Your upcoming and past room reservations.',
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.gutter,
+                    AppSpace.lg + 4,
+                    AppSpace.gutter,
+                    AppSpace.lg,
+                  ),
+                  child: Row(
+                    children: [
+                      for (final filter in _Filter.values)
+                        Padding(
+                          padding: const EdgeInsets.only(right: AppSpace.sm),
+                          child: _FilterChip(
+                            filter: filter,
+                            count: all.where(filter.includes).length,
+                            selected: _filter == filter,
+                            onSelected: () => setState(() => _filter = filter),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              ..._content(snapshot, all, rooms),
+            ],
+          );
+        },
+      ),
+    ),
+  );
+
+  List<Widget> _content(
+    AsyncSnapshot<List<Reservation>> snapshot,
+    List<Reservation> all,
+    Map<String, Room> rooms,
+  ) {
+    if (snapshot.hasError) {
+      return [
+        SliverToBoxAdapter(
+          child: EmptyState(
+            title: 'Your bookings couldn’t load',
+            message: 'Check your internet connection, then try again.',
+            icon: Icons.wifi_off_rounded,
+            action: OutlinedButton.icon(
+              onPressed: () => setState(
+                () => _bookings = widget.reservations.watchMyReservations(
+                  widget.uid,
+                ),
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try again'),
+            ),
+          ),
+        ),
+      ];
+    }
+    if (!snapshot.hasData) {
+      return const [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.all(48),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ];
+    }
+    final bookings = all.where(_filter.includes).toList()
+      ..sort(
+        (a, b) =>
+            '${a.date}${a.startMinute.toString().padLeft(4, '0')}'.compareTo(
+              '${b.date}${b.startMinute.toString().padLeft(4, '0')}',
+            ) *
+            (_filter == _Filter.upcoming ? 1 : -1),
+      );
+    if (bookings.isEmpty) {
+      final (title, message) = switch (_filter) {
+        _Filter.past => (
+          'No past bookings',
+          'Reservations you have used will appear here.',
+        ),
+        _Filter.cancelled => (
+          'No cancelled bookings',
+          'Bookings you cancel are kept here for reference.',
+        ),
+        _Filter.upcoming =>
+          EmulatorConfig.bookingsAvailable
+              ? (
+                  'No upcoming bookings',
+                  'Find a free room and reserve a time in a few taps.',
+                )
+              : (
+                  'Online booking is being prepared',
+                  'You can browse live ITD room information now. Reservations will appear here when booking opens.',
+                ),
+      };
+      return [
+        SliverToBoxAdapter(
+          child: EmptyState(
+            title: title,
+            message: message,
+            icon: _filter == _Filter.cancelled
+                ? Icons.event_busy_outlined
+                : Icons.event_available_outlined,
+            action: _filter == _Filter.upcoming
+                ? FilledButton.icon(
+                    onPressed: widget.onExplore,
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text('Find a room'),
+                  )
+                : null,
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.gutter,
+          0,
+          AppSpace.gutter,
+          AppSpace.xxl,
+        ),
+        sliver: SliverList.separated(
+          itemCount: bookings.length,
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpace.md),
+          itemBuilder: (context, index) {
+            final booking = bookings[index];
+            final room = rooms[booking.roomId];
+            return _BookingCard(
+              booking: booking,
+              roomName: room?.name ?? booking.roomId,
+              next:
+                  _filter == _Filter.upcoming &&
+                  index == 0 &&
+                  !BookingTime.hasStarted(booking),
+              cancelling: _cancelling.contains(booking.id),
+              onCancel: () => _cancel(booking, room?.name ?? booking.roomId),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.filter,
+    required this.count,
+    required this.selected,
+    required this.onSelected,
+  });
+  final _Filter filter;
+  final int count;
+  final bool selected;
+  final VoidCallback onSelected;
+  @override
+  Widget build(BuildContext context) => ChoiceChip(
+    selected: selected,
+    onSelected: (_) => onSelected(),
+    label: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(filter.label),
+        if (count > 0) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white.withValues(alpha: .2)
+                  : AppColors.panel,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$count',
+              semanticsLabel: '$count bookings',
+              style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                color: selected ? Colors.white : AppColors.muted,
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _BookingCard extends StatelessWidget {
+  const _BookingCard({
+    required this.booking,
+    required this.roomName,
+    required this.next,
+    required this.cancelling,
+    required this.onCancel,
+  });
+  final Reservation booking;
+  final String roomName;
+
+  /// The soonest upcoming booking; shown with a countdown.
+  final bool next;
+  final bool cancelling;
+  final VoidCallback onCancel;
+
+  String _countdown() {
     final difference = BookingTime.instant(
       booking.date,
       booking.startMinute,
@@ -107,9 +350,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
     if (difference.inMinutes < 60) {
       return 'Starts in ${difference.inMinutes.clamp(1, 59)} min';
     }
-    if (difference.inHours < 24) {
-      return 'Starts in ${difference.inHours} hr';
-    }
+    if (difference.inHours < 24) return 'Starts in ${difference.inHours} hr';
     if (difference.inDays < 7) {
       return 'Starts in ${difference.inDays} ${difference.inDays == 1 ? 'day' : 'days'}';
     }
@@ -117,302 +358,149 @@ class _BookingsScreenState extends State<BookingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    bottom: false,
-    child: CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final started = BookingTime.hasStarted(booking);
+    final ended = BookingTime.hasEnded(booking);
+    final (status, tone) = booking.isCancelled
+        ? ('Cancelled', PillTone.neutral)
+        : ended
+        ? ('Completed', PillTone.neutral)
+        : started
+        ? ('In progress', PillTone.accent)
+        : ('Confirmed', PillTone.success);
+    final day = BookingTime.parseDate(booking.date);
+    final faded = booking.isCancelled || ended;
+    return SurfaceCard(
+      borderColor: next ? AppColors.ink.withValues(alpha: .35) : AppColors.line,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (next) ...[
+            Row(
               children: [
-                const ItdBrand(section: 'My Bookings', logoHeight: 38),
-                const SizedBox(height: 22),
-                Text(
-                  'My bookings',
-                  style: Theme.of(context).textTheme.headlineMedium,
+                const Icon(
+                  Icons.notifications_active_outlined,
+                  size: 18,
+                  color: AppColors.accent,
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Your upcoming and past room reservations.',
-                  style: TextStyle(color: AppColors.muted, fontSize: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _countdown(),
+                    style: text.labelMedium!.copyWith(color: AppColors.accent),
+                  ),
                 ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: ['Upcoming', 'Completed', 'Cancelled']
-                      .asMap()
-                      .entries
-                      .map(
-                        (entry) => ChoiceChip(
-                          label: Text(entry.value),
-                          selected: _filter == entry.key,
-                          showCheckmark: false,
-                          selectedColor: AppColors.mint,
-                          side: const BorderSide(color: AppColors.line),
-                          onSelected: (_) =>
-                              setState(() => _filter = entry.key),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 12),
               ],
             ),
-          ),
-        ),
-        StreamBuilder<List<Room>>(
-          stream: _rooms,
-          builder: (context, roomSnapshot) => StreamBuilder<List<Reservation>>(
-            stream: _bookings,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return SliverToBoxAdapter(
-                  child: EmptyState(
-                    title: 'Your bookings couldn’t load',
-                    message: 'Check your connection and try again.',
-                    icon: Icons.wifi_off_rounded,
-                    action: OutlinedButton(
-                      onPressed: () => setState(
-                        () => _bookings = widget.reservations
-                            .watchMyReservations(widget.uid),
-                      ),
-                      child: const Text('Try again'),
-                    ),
+            const SizedBox(height: AppSpace.md),
+          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ExcludeSemantics(
+                child: Container(
+                  width: 58,
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+                  decoration: BoxDecoration(
+                    color: next
+                        ? AppColors.ink
+                        : faded
+                        ? AppColors.panel
+                        : AppColors.navyTint,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
-                );
-              }
-              if (!snapshot.hasData) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(48),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                );
-              }
-              final bookings = snapshot.data!
-                  .where(
-                    (b) => switch (_filter) {
-                      2 => b.isCancelled,
-                      1 => !b.isCancelled && BookingTime.hasEnded(b),
-                      _ => !b.isCancelled && !BookingTime.hasEnded(b),
-                    },
-                  )
-                  .toList();
-              bookings.sort(
-                (a, b) =>
-                    '${a.date}${a.startMinute.toString().padLeft(4, '0')}'
-                        .compareTo(
-                          '${b.date}${b.startMinute.toString().padLeft(4, '0')}',
-                        ) *
-                    (_filter == 0 ? 1 : -1),
-              );
-              if (bookings.isEmpty) {
-                return SliverToBoxAdapter(
-                  child: EmptyState(
-                    title: switch (_filter) {
-                      1 => 'Good things are ahead',
-                      2 => 'Nothing cancelled',
-                      _ =>
-                        EmulatorConfig.bookingsAvailable
-                            ? 'Your next idea starts here'
-                            : 'Online booking is being prepared',
-                    },
-                    message: switch (_filter) {
-                      1 => 'Your completed reservations will appear here.',
-                      2 =>
-                        'Cancelled reservations will stay here for your reference.',
-                      _ =>
-                        EmulatorConfig.bookingsAvailable
-                            ? 'Find a room and make a little time for something great.'
-                            : 'You can browse live ITD room information now. Reservations will appear here when booking opens.',
-                    },
-                    action: _filter == 0
-                        ? FilledButton(
-                            onPressed: widget.onExplore,
-                            child: const Text('Find a room'),
-                          )
-                        : null,
-                  ),
-                );
-              }
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
-                sliver: SliverList.separated(
-                  itemCount: bookings.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final booking = bookings[index];
-                    Room? room;
-                    for (final r in roomSnapshot.data ?? <Room>[]) {
-                      if (r.id == booking.roomId) room = r;
-                    }
-                    final started = BookingTime.hasStarted(booking),
-                        ended = BookingTime.hasEnded(booking);
-                    final featured = _filter == 0 && index == 0 && !started;
-                    final status = booking.isCancelled
-                        ? 'Cancelled'
-                        : ended
-                        ? 'Completed'
-                        : started
-                        ? 'In progress'
-                        : 'Confirmed';
-                    return Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: featured ? AppColors.mint : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: featured
-                              ? AppColors.accent.withValues(alpha: .35)
-                              : AppColors.line,
+                  child: Column(
+                    children: [
+                      Text(
+                        DateFormat('MMM').format(day).toUpperCase(),
+                        style: text.labelSmall!.copyWith(
+                          color: next ? Colors.white70 : AppColors.muted,
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (featured) ...[
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.upcoming_rounded,
-                                  size: 18,
-                                  color: AppColors.accent,
-                                ),
-                                const SizedBox(width: 7),
-                                Expanded(
-                                  child: Text(
-                                    _upcomingLabel(booking),
-                                    style: const TextStyle(
-                                      color: AppColors.accent,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                          ],
-                          Row(
-                            children: [
-                              if (room != null) ...[
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: SizedBox(
-                                    width: 64,
-                                    child: RoomArtwork(room: room, height: 64),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                              ],
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      room?.name ?? booking.roomId,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 9,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: booking.isCancelled
-                                              ? AppColors.panel
-                                              : AppColors.successTint,
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          status,
-                                          style: TextStyle(
-                                            color: booking.isCancelled
-                                                ? AppColors.muted
-                                                : AppColors.available,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          const Divider(),
-                          DetailLine('Date', dateLabel(booking.date)),
-                          DetailLine(
-                            'Time',
-                            '${timeLabel(booking.startMinute)} – ${timeLabel(booking.endMinute)}',
-                          ),
-                          DetailLine('Purpose', booking.purpose),
-                          DetailLine('Reference', booking.reference),
-                          if (!booking.isCancelled && !started) ...[
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: _cancelling.contains(booking.id)
-                                    ? null
-                                    : () => _cancel(booking),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF9C3E28),
-                                  side: const BorderSide(
-                                    color: Color(0xFFE6B8AE),
-                                  ),
-                                ),
-                                child: _cancelling.contains(booking.id)
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.delete_outline_rounded,
-                                            size: 18,
-                                          ),
-                                          SizedBox(width: 8),
-                                          Flexible(
-                                            child: Text(
-                                              'Cancel reservation',
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ],
+                      Text(
+                        '${day.day}',
+                        style: text.headlineSmall!.copyWith(
+                          height: 1.1,
+                          color: next
+                              ? Colors.white
+                              : faded
+                              ? AppColors.muted
+                              : AppColors.ink,
+                        ),
                       ),
-                    );
-                  },
+                      Text(
+                        DateFormat('EEE').format(day),
+                        style: text.labelSmall!.copyWith(
+                          color: next ? Colors.white70 : AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
+              ),
+              const SizedBox(width: AppSpace.md + 2),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(roomName, style: text.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${relativeDayLabel(day)} · '
+                      '${rangeLabel(booking.startMinute, booking.endMinute)}',
+                      style: text.bodyMedium,
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(
+                      booking.purpose,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyMedium!.copyWith(color: AppColors.muted),
+                    ),
+                    const SizedBox(height: AppSpace.xs),
+                    Text(
+                      'Ref. ${booking.reference}',
+                      style: text.bodySmall!.copyWith(color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: AppSpace.md),
+          const Divider(),
+          const SizedBox(height: AppSpace.sm),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpace.md,
+            runSpacing: AppSpace.sm,
+            children: [
+              StatusPill(status, tone: tone),
+              if (!booking.isCancelled && !started)
+                TextButton.icon(
+                  onPressed: cancelling ? null : onCancel,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  icon: cancelling
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.danger,
+                          ),
+                        )
+                      : const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Cancel reservation'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

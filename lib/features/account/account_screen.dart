@@ -9,126 +9,124 @@ class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key, required this.auth});
   final AuthController auth;
   @override
-  Widget build(BuildContext context) => SafeArea(
-    bottom: false,
-    child: ListenableBuilder(
-      listenable: auth,
-      builder: (context, _) {
-        final user = auth.currentUser;
-        final name = (user?.displayName?.trim().isNotEmpty ?? false)
-            ? user!.displayName!
-            : 'IBIT member';
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(24, 26, 24, 32),
-          children: [
-            const ItdBrand(section: 'Account', logoHeight: 42),
-            const SizedBox(height: 26),
-            const Eyebrow('Part of something good'),
-            const SizedBox(height: 10),
-            Text(
-              'Your IBIT account.',
-              style: Theme.of(context).textTheme.headlineLarge,
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return SafeArea(
+      bottom: false,
+      child: ListenableBuilder(
+        listenable: auth,
+        builder: (context, _) {
+          final user = auth.currentUser;
+          final name = (user?.displayName?.trim().isNotEmpty ?? false)
+              ? user!.displayName!
+              : 'IBIT member';
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.gutter,
+              AppSpace.lg,
+              AppSpace.gutter,
+              AppSpace.xxl,
             ),
-            const SizedBox(height: 32),
-            Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 34,
-                    backgroundColor: AppColors.successTint,
-                    child: Text(
-                      name.characters.first.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.available,
+            children: [
+              const ScreenHeader(title: 'Account'),
+              const SizedBox(height: AppSpace.lg + 4),
+              SurfaceCard(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: AppColors.navyTint,
+                      child: Text(
+                        name.characters.first.toUpperCase(),
+                        style: text.headlineSmall,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    name,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    user?.email ?? '',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 12),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.verified_outlined,
-                        size: 16,
-                        color: AppColors.available,
-                      ),
-                      SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          'Verified member',
-                          style: TextStyle(
-                            color: AppColors.available,
-                            fontSize: 12,
+                    const SizedBox(width: AppSpace.md + 2),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name, style: text.titleMedium),
+                          Text(
+                            user?.email ?? '',
+                            style: text.bodySmall!.copyWith(
+                              color: AppColors.muted,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: AppSpace.sm),
+                          const StatusPill(
+                            'Verified member',
+                            tone: PillTone.success,
+                            icon: Icons.verified_outlined,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            const Eyebrow('A few things to know'),
-            const SizedBox(height: 14),
-            const Notice(
-              'Our spaces are open Monday–Friday, 8 AM–12 PM and 1–4 PM. All times shown are Bangkok time.',
-            ),
-            const SizedBox(height: 12),
-            const Notice(
-              'Plans changed? Cancel before your reservation starts to make room for someone else.',
-              icon: Icons.favorite_border_rounded,
-            ),
-            if (EmulatorConfig.enabled) ...[
-              const SizedBox(height: 20),
-              const Notice(
-                'Local development build. Reservations and accounts are stored in the Firebase emulators on your computer.',
-                icon: Icons.science_outlined,
-              ),
-            ],
-            if (auth.error != null) ...[
-              const SizedBox(height: 16),
-              Notice(auth.error!, isError: true),
-            ],
-            const SizedBox(height: 26),
-            OutlinedButton.icon(
-              key: const Key('sign_out'),
-              onPressed: auth.loading ? null : auth.signOut,
-              icon: const Icon(Icons.logout_rounded, size: 18),
-              label: const Text('Sign out'),
-            ),
-            const SizedBox(height: 32),
-            const Center(
-              child: Text(
-                'IBIT ROOMS  /  VERSION 1.0',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1.7,
-                  color: AppColors.muted,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        );
-      },
-    ),
-  );
+              const SizedBox(height: AppSpace.xl),
+              const SectionHeader('Booking rules'),
+              const SizedBox(height: AppSpace.md),
+              const SurfaceCard(
+                child: Column(
+                  children: [
+                    InfoRow(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Open days',
+                      value: 'Monday to Friday',
+                    ),
+                    SizedBox(height: AppSpace.lg),
+                    InfoRow(
+                      icon: Icons.schedule_rounded,
+                      label: 'Sessions',
+                      value: '8:00 AM–12:00 PM and 1:00–4:00 PM',
+                    ),
+                    SizedBox(height: AppSpace.lg),
+                    InfoRow(
+                      icon: Icons.public_rounded,
+                      label: 'Time zone',
+                      value: 'Bangkok time (GMT+7)',
+                    ),
+                    SizedBox(height: AppSpace.lg),
+                    InfoRow(
+                      icon: Icons.event_busy_outlined,
+                      label: 'Cancellation',
+                      value: 'Any time before your booking starts',
+                    ),
+                  ],
+                ),
+              ),
+              if (EmulatorConfig.enabled) ...[
+                const SizedBox(height: AppSpace.lg),
+                const Notice(
+                  'Local development build. Reservations and accounts are stored in the Firebase emulators on your computer.',
+                  icon: Icons.science_outlined,
+                  tone: NoticeTone.accent,
+                ),
+              ],
+              if (auth.error != null) ...[
+                const SizedBox(height: AppSpace.lg),
+                Notice(auth.error!, isError: true),
+              ],
+              const SizedBox(height: AppSpace.xl),
+              OutlinedButton.icon(
+                key: const Key('sign_out'),
+                onPressed: auth.loading ? null : auth.signOut,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Sign out'),
+              ),
+              const SizedBox(height: AppSpace.xl),
+              Center(
+                child: Text(
+                  'IBIT Rooms · Version 1.0',
+                  style: text.bodySmall!.copyWith(color: AppColors.muted),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }

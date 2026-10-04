@@ -100,7 +100,7 @@ class _AppShellState extends State<AppShell> {
           NavigationDestination(
             icon: Icon(Icons.event_note_outlined),
             selectedIcon: Icon(Icons.event_note_rounded),
-            label: 'My Bookings',
+            label: 'Bookings',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),

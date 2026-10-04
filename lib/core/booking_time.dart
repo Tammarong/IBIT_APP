@@ -62,8 +62,48 @@ abstract final class BookingTime {
         '${(minute % 60).toString().padLeft(2, '0')} $suffix';
   }
 
-  static String formatRange(int start, int end) =>
-      '${formatMinute(start)} – ${formatMinute(end)}';
+  /// "8:00–9:30 AM", or "11:00 AM–1:00 PM" when the meridiem changes.
+  static String formatRange(int start, int end) {
+    final from = formatMinute(start), to = formatMinute(end);
+    return from.substring(from.length - 2) == to.substring(to.length - 2)
+        ? '${from.substring(0, from.length - 3)}–$to'
+        : '$from–$to';
+  }
+
+  static const sessions = [
+    (morningStart, morningEnd),
+    (afternoonStart, afternoonEnd),
+  ];
+
+  /// Bookable gaps on [date] after removing [busy] intervals and, for today,
+  /// minutes that have already started.
+  static List<(int, int)> freeWindows(
+    String date,
+    List<BusyInterval> busy, [
+    DateTime? instant,
+  ]) {
+    final day = parseDate(date), today = BookingTime.today(instant);
+    if (!isWeekday(day) || day.isBefore(today)) return const [];
+    final now = bangkokNow(instant);
+    final lower = day == today ? now.hour * 60 + now.minute + 1 : 0;
+    final sorted = [...busy]
+      ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
+    final windows = <(int, int)>[];
+    for (final (sessionStart, sessionEnd) in sessions) {
+      var cursor = sessionStart < lower ? lower : sessionStart;
+      for (final interval in sorted) {
+        if (cursor >= sessionEnd) break;
+        if (interval.endMinute <= cursor) continue;
+        if (interval.startMinute >= sessionEnd) break;
+        if (interval.startMinute > cursor) {
+          windows.add((cursor, interval.startMinute));
+        }
+        cursor = interval.endMinute;
+      }
+      if (cursor < sessionEnd) windows.add((cursor, sessionEnd));
+    }
+    return windows;
+  }
 
   static String formatDate(String date, {bool short = false}) {
     final day = parseDate(date);

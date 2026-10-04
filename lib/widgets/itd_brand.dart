@@ -2,56 +2,75 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 
-/// Official ITD faculty wordmark with the app section beneath it.
-class ItdBrand extends StatelessWidget {
-  const ItdBrand({super.key, required this.section, this.logoHeight = 48});
+/// Official ITD faculty wordmark. Never recolour, crop or stretch it.
+class ItdLogo extends StatelessWidget {
+  const ItdLogo({super.key, this.height = 30});
 
-  final String section;
-  final double logoHeight;
+  final double height;
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'ITD faculty logo. $section',
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: logoHeight,
-          child: Image.asset(
-            'assets/branding/itd-header.png',
-            fit: BoxFit.contain,
-            alignment: Alignment.centerLeft,
-            excludeFromSemantics: true,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          constraints: const BoxConstraints(minHeight: 38),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.ink,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Container(width: 4, height: 17, color: AppColors.orange),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  section.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    label: 'ITD faculty logo',
+    image: true,
+    child: Image.asset(
+      'assets/branding/itd-header.png',
+      height: height,
+      fit: BoxFit.contain,
+      alignment: Alignment.centerLeft,
+      excludeFromSemantics: true,
     ),
   );
+}
+
+/// Top of every tab: compact logo, page title and one line of context.
+class ScreenHeader extends StatelessWidget {
+  const ScreenHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Flexible(child: ItdLogo()),
+            if (trailing != null) ...[
+              const SizedBox(width: AppSpace.md),
+              trailing!,
+            ],
+          ],
+        ),
+        const SizedBox(height: AppSpace.lg + 4),
+        Semantics(
+          header: true,
+          child: Text(
+            title,
+            style: text.headlineMedium,
+            // Large headings grow less, as Android's non-linear scaling does,
+            // so the controls below stay reachable at 200% text.
+            textScaler: MediaQuery.textScalerOf(
+              context,
+            ).clamp(maxScaleFactor: 1.5),
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            subtitle!,
+            style: text.bodyMedium!.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ],
+    );
+  }
 }

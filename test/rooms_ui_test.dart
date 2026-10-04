@@ -230,7 +230,7 @@ void main() {
         onBooked: () {},
       ),
     );
-    final suggestion = find.text('8:00 AM–9:00 AM');
+    final suggestion = find.text('8:00–9:00 AM');
     await tester.scrollUntilVisible(
       suggestion,
       180,
@@ -297,7 +297,7 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Let’s reconnect'), findsOneWidget);
+    expect(find.text('Couldn’t load rooms'), findsOneWidget);
     expect(find.text('Try again'), findsOneWidget);
   });
 

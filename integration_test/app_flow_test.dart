@@ -186,7 +186,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('confirm_reservation')));
       await tester.tap(find.byKey(const Key('confirm_reservation')));
-      await waitFor(find.text('Space secured.\nIdeas welcome.'));
+      await waitFor(find.text('Reservation confirmed'));
 
       final uid = FirebaseAuth.instance.currentUser!.uid;
       final snapshot = await FirebaseDatabase.instance
@@ -206,7 +206,7 @@ void main() {
       await waitFor(find.text('Confirmed'));
       await tapText('Cancel reservation');
       await tapText('Cancel booking');
-      await waitFor(find.text('Your next idea starts here'));
+      await waitFor(find.text('No upcoming bookings'));
       await tapText('Cancelled');
       await waitFor(find.text('Android integration project discussion'));
       final released = await FirebaseDatabase.instance.ref(dayPath).get();

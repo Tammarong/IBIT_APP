@@ -28,160 +28,188 @@ class _RoomDetailScreenState extends State<RoomDetailScreen> {
   late DateTime _date = widget.date;
   late Stream<Map<String, List<BusyInterval>>> _availability = widget.rooms
       .watchAvailability(dayKey(_date));
+
+  void _setDate(DateTime date) => setState(() {
+    _date = dateOnly(date);
+    _availability = widget.rooms.watchAvailability(dayKey(_date));
+  });
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Your next space', style: TextStyle(fontSize: 16)),
-    ),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: RoomArtwork(room: widget.room, height: 248),
+  Widget build(BuildContext context) {
+    final room = widget.room;
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Room details')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.gutter,
+          AppSpace.xs,
+          AppSpace.gutter,
+          AppSpace.xl,
         ),
-        const SizedBox(height: 26),
-        const Eyebrow('ITD faculty · Official room listing'),
-        const SizedBox(height: 8),
-        Text(
-          widget.room.name,
-          style: Theme.of(context).textTheme.headlineLarge,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          widget.room.subtitle,
-          style: const TextStyle(color: AppColors.accent, fontSize: 16),
-        ),
-        if (widget.room.officialName != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            widget.room.officialName!,
-            style: const TextStyle(color: AppColors.muted),
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            child: RoomArtwork(room: room, height: 220),
           ),
-        ],
-        if (widget.room.description.trim().isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text(
-            widget.room.description,
-            style: const TextStyle(color: AppColors.muted, height: 1.7),
-          ),
-        ],
-        if (widget.room.sourceUrl != null) ...[
-          const SizedBox(height: 12),
-          Row(
+          const SizedBox(height: AppSpace.lg + 4),
+          Text(room.name, style: text.headlineMedium),
+          if (room.officialName != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              room.officialName!,
+              style: text.bodyLarge!.copyWith(color: AppColors.muted),
+            ),
+          ],
+          const SizedBox(height: AppSpace.md),
+          Wrap(
+            spacing: AppSpace.sm,
+            runSpacing: AppSpace.sm,
             children: [
-              const Icon(
-                Icons.verified_outlined,
-                size: 16,
-                color: AppColors.accent,
+              StatusPill(
+                roomTypeLabel(room),
+                tone: PillTone.navy,
+                icon: room.category == 'computer'
+                    ? Icons.computer_rounded
+                    : Icons.meeting_room_outlined,
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Official ITD room listing · itd.kmutnb.ac.th',
-                  style: const TextStyle(color: AppColors.accent, fontSize: 12),
-                ),
-              ),
+              if (room.floor != null)
+                StatusPill('Floor ${room.floor}', icon: Icons.stairs_outlined),
+              room.bookingEnabled
+                  ? const StatusPill(
+                      'Bookable',
+                      tone: PillTone.success,
+                      icon: Icons.event_available_rounded,
+                    )
+                  : const StatusPill(
+                      'View only',
+                      icon: Icons.visibility_outlined,
+                    ),
             ],
           ),
-        ],
-        if (widget.room.facilities.isNotEmpty) ...[
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: widget.room.facilities
-                .map(
-                  (f) => Chip(
-                    label: Text(f),
-                    backgroundColor: Colors.white,
-                    side: const BorderSide(color: AppColors.line),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-        if (!widget.room.bookingEnabled) ...[
-          const SizedBox(height: 24),
-          Notice(
-            widget.room.category == 'classroom' ||
-                    widget.room.category == 'computer'
-                ? (EmulatorConfig.bookingsAvailable
-                      ? 'This room is listed by ITD. App booking will become available after its Firebase record is configured.'
-                      : 'Rooms and sign-in use live Firebase. Online booking is being prepared.')
-                : 'This specialized room is listed for information only and cannot be booked in the app.',
-          ),
-        ],
-        if (widget.room.bookingEnabled) ...[
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-          Text(
-            'Make time for good ideas',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final date = await pickBookingDate(context, _date);
-              if (date != null) {
-                setState(() {
-                  _date = dateOnly(date);
-                  _availability = widget.rooms.watchAvailability(dayKey(date));
-                });
-              }
-            },
-            icon: const Icon(Icons.calendar_today_outlined, size: 18),
-            label: Text(dateLabel(dayKey(_date))),
-          ),
-          const SizedBox(height: 24),
-          StreamBuilder<Map<String, List<BusyInterval>>>(
-            key: ValueKey(dayKey(_date)),
-            stream: _availability,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Notice(
-                  'Availability could not be loaded. Please check your connection.',
-                  isError: true,
-                );
-              }
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return AvailabilityTimeline(
-                intervals: snapshot.data![widget.room.id] ?? [],
-                date: dayKey(_date),
-              );
-            },
-          ),
-          const SizedBox(height: 26),
-          const Notice(
-            'Choose your own start and end time. Each reservation must fit within the morning or afternoon session.',
-          ),
-        ],
-      ],
-    ),
-    bottomNavigationBar: !widget.room.bookingEnabled
-        ? null
-        : SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
-              child: FilledButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => ReservationScreen(
-                      room: widget.room,
-                      date: _date,
-                      rooms: widget.rooms,
-                      reservations: widget.reservations,
-                      onBooked: widget.onBooked,
-                    ),
+          if (room.description.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpace.lg),
+            Text(
+              room.description,
+              style: text.bodyMedium!.copyWith(color: AppColors.muted),
+            ),
+          ],
+          if (room.facilities.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.lg),
+            Text('Facilities', style: text.titleSmall),
+            const SizedBox(height: AppSpace.sm),
+            Wrap(
+              spacing: AppSpace.sm,
+              runSpacing: AppSpace.sm,
+              children: [for (final f in room.facilities) StatusPill(f)],
+            ),
+          ],
+          if (room.sourceUrl != null) ...[
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                const Icon(
+                  Icons.verified_outlined,
+                  size: 16,
+                  color: AppColors.accent,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Official ITD room listing · itd.kmutnb.ac.th',
+                    style: text.bodySmall!.copyWith(color: AppColors.accent),
                   ),
                 ),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Reserve this room'),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpace.xl),
+          if (!room.bookingEnabled)
+            Notice(
+              room.category == 'classroom' || room.category == 'computer'
+                  ? (EmulatorConfig.bookingsAvailable
+                        ? 'This room is listed by ITD. App booking will become available after its Firebase record is configured.'
+                        : 'Rooms and sign-in use live Firebase. Online booking is being prepared.')
+                  : 'This specialized room is listed for information only and cannot be booked in the app.',
+            )
+          else ...[
+            SurfaceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionHeader(
+                    'Availability',
+                    subtitle: 'Bangkok time · Monday to Friday',
+                  ),
+                  const SizedBox(height: AppSpace.lg),
+                  DayStepper(date: _date, onChanged: _setDate),
+                  const SizedBox(height: AppSpace.lg + 4),
+                  StreamBuilder<Map<String, List<BusyInterval>>>(
+                    key: ValueKey(dayKey(_date)),
+                    stream: _availability,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Notice(
+                          'Availability couldn’t be loaded. Check your connection and try again.',
+                          isError: true,
+                        );
+                      }
+                      if (!snapshot.hasData) {
+                        return const Padding(
+                          padding: EdgeInsets.all(AppSpace.xl),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      return AvailabilityTimeline(
+                        intervals: snapshot.data![room.id] ?? [],
+                        date: dayKey(_date),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
-          ),
-  );
+            const SizedBox(height: AppSpace.lg),
+            const Notice(
+              'Choose any start and end time within one session. You can cancel until your booking starts.',
+              tone: NoticeTone.accent,
+            ),
+          ],
+        ],
+      ),
+      bottomNavigationBar: !room.bookingEnabled
+          ? null
+          : DecoratedBox(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.line)),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.gutter,
+                    AppSpace.md,
+                    AppSpace.gutter,
+                    AppSpace.md,
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ReservationScreen(
+                          room: room,
+                          date: _date,
+                          rooms: widget.rooms,
+                          reservations: widget.reservations,
+                          onBooked: widget.onBooked,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Reserve this room'),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
 }
