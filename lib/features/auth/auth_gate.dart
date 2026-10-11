@@ -334,17 +334,6 @@ class _AuthScreenState extends State<AuthScreen> {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        if (EmulatorConfig.enabled)
-                          Padding(
-                            padding: const EdgeInsets.only(top: AppSpace.sm),
-                            child: Center(
-                              child: StatusPill(
-                                'Local development · Firebase emulators',
-                                tone: PillTone.accent,
-                                icon: Icons.science_outlined,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),

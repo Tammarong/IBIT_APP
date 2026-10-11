@@ -24,6 +24,9 @@
   "database": {
     "rules": "database.rules.json"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "auth": {
     "providers": {
       "emailPassword": true,
@@ -49,6 +52,10 @@
     "functions": {
       "host": "127.0.0.1",
       "port": 5001
+    },
+    "storage": {
+      "host": "127.0.0.1",
+      "port": 9199
     },
     "ui": {
       "enabled": true,

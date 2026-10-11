@@ -117,6 +117,10 @@ widget.
   in lists.
 - Errors say what happened and what to do next. Say "Bangkok time" wherever
   booking rules are stated.
+- No build or environment labels on screens: no "Local development",
+  "Firebase emulators", "debug" or similar badges, pills or notices, even
+  behind `EmulatorConfig.enabled`. Emulator mode may still change behaviour
+  (e.g. "Try simulated Google account") but is never announced as such.
 
 ## Accessibility checklist
 

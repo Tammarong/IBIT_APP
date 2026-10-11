@@ -46,6 +46,8 @@ class PreviewUser extends Fake implements User {
   String get email => 'napat.s@email.kmutnb.ac.th';
   @override
   String get displayName => 'Napat Srisuk';
+  @override
+  String? get photoURL => null;
 }
 
 class PreviewAuth implements AuthRepository {
@@ -66,6 +68,11 @@ class PreviewAuth implements AuthRepository {
   Future<void> resetPassword(String email) async {}
   @override
   Future<void> signInGoogle() async {}
+  @override
+  Future<void> updateProfile({
+    required String displayName,
+    String? photoUrl,
+  }) async {}
   @override
   Future<void> signOut() async {}
 }

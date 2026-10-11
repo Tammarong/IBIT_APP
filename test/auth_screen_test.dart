@@ -11,8 +11,11 @@ class TestAuthRepository implements AuthRepository {
   @override
   User? currentUser;
   bool failSignIn = false;
+  bool failProfileUpdate = false;
   int signInCount = 0;
   int resetCount = 0;
+  String? updatedDisplayName;
+  String? updatedPhotoUrl;
   @override
   Stream<User?> userChanges() => changes.stream;
   @override
@@ -35,6 +38,18 @@ class TestAuthRepository implements AuthRepository {
   @override
   Future<void> signInGoogle() async {}
   @override
+  Future<void> updateProfile({
+    required String displayName,
+    String? photoUrl,
+  }) async {
+    if (failProfileUpdate) {
+      throw FirebaseAuthException(code: 'invalid-credential');
+    }
+    updatedDisplayName = displayName;
+    updatedPhotoUrl = photoUrl;
+  }
+
+  @override
   Future<void> signOut() async {}
 }
 
@@ -44,6 +59,8 @@ class TestUser extends Fake implements User {
   final bool emailVerified;
   @override
   String get email => 'student@ibit.example';
+  @override
+  String? get photoURL => null;
 }
 
 void main() {
@@ -86,6 +103,23 @@ void main() {
     await tester.pumpAndSettle();
     return controller;
   }
+
+  test('profile update reports an expired session clearly', () async {
+    final repository = TestAuthRepository()
+      ..currentUser = TestUser(true)
+      ..failProfileUpdate = true;
+    final controller = AuthController(repository);
+    addTearDown(controller.dispose);
+    addTearDown(repository.changes.close);
+
+    final updated = await controller.updateProfile(displayName: 'New name');
+
+    expect(updated, isFalse);
+    expect(
+      controller.error,
+      'Your session has expired. Please sign in again before updating your profile.',
+    );
+  });
 
   testWidgets(
     'failed sign-in preserves email and password and explains the error',

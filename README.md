@@ -34,6 +34,7 @@
 - **Reserve** any of the 13 classrooms and computer rooms for your own start and end time, Monday–Friday, **8:00 AM–12:00 PM** or **1:00–4:00 PM** (Bangkok time). The 5 preparation, server and exam rooms are information only.
 - **Manage bookings:** see upcoming, past and cancelled bookings, and cancel any time before a booking starts.
 - **Sign in** with email (with verification) or Google.
+- **Edit your profile:** change your display name and upload a profile picture.
 
 The server checks every booking: no weekends, past times, lunch-hour overlaps, double bookings or unverified accounts.
 
@@ -175,7 +176,7 @@ Then tap **I've verified my email** in the app. Verification and password-reset 
 | `running scripts is disabled on this system` | Run the `Set-ExecutionPolicy` line from [step 2](#2-download-the-project), or start a script with `powershell -ExecutionPolicy Bypass -File .\scripts\start-emulators.ps1`. |
 | `Install Java 21 or newer…` from `start-emulators.ps1` | Install Java (step 1) and open a **new** PowerShell window. |
 | `Start Firebase emulators … first` | Terminal 1 must show **All emulators ready** before you run step 4. |
-| Port `4000`, `5001`, `9000` or `9099` is already in use | An older backend is still running. Stop it with `Ctrl+C` (or close that window) and start again. |
+| Port `4000`, `5001`, `9000`, `9099`, or `9199` is already in use | An older backend is still running. Stop it with `Ctrl+C` (or close that window) and start again. |
 | The app says the connection is not configured | The backend isn't running. Start step 3, then tap **Try again**. |
 | **Option A:** sign-in shows `API key not valid` | Open the app at `http://localhost:…`, not `127.0.0.1`. `run-web.ps1` does this for you. |
 | **Option A:** rooms show illustrations instead of photos | Expected. The ITD website doesn't allow other sites to load its photos in a browser. The Android app shows the real photos. |
@@ -208,6 +209,7 @@ The included `android/app/google-services.json` holds client configuration only,
 ```
 
 - Email registration sends a **real** verification email.
+- Profile pictures use Firebase Storage. Deploy the included owner-only rules with `firebase deploy --only storage` before enabling profile-photo uploads in the live project.
 - Google sign-in on a new computer needs that computer's debug SHA-1 and SHA-256 added to the Android app in Firebase Console. Get them with `.\android\gradlew.bat -p android signingReport`. See the [FlutterFire setup guide](https://firebase.google.com/docs/flutter/setup).
 - **Reserve is disabled** in this mode, because the booking functions aren't deployed (deploying requires the paid Blaze plan).
 - Build its APK with `.\scripts\build-cloud-apk.ps1` → `artifacts/ibit-rooms-live-debug.apk`.
@@ -265,6 +267,7 @@ integration_test/  Android end-to-end flow against the emulators
 
 - Realtime Database separates editable `appData/rooms/{roomId}`, private `appData/reservations/{id}`, and shared `appData/roomDays/{date}/{roomId}` availability. Shared availability holds only opaque IDs and times, never another user's identity or purpose.
 - The backend books inside an atomic transaction with idempotent request IDs, so a retried request can't double-book. Cancelling releases the time. Adjacent bookings are allowed; times are whole minutes.
+- Display names and photo URLs are stored in Firebase Authentication. Profile image files use `profilePictures/{uid}/avatar` in Firebase Storage, where only that signed-in user can write.
 - The app has no payments, recurring bookings, notifications or admin dashboard.
 
 ### Design system
@@ -278,7 +281,7 @@ The scripts are written for Windows PowerShell, but the steps are the same. Inst
 ```bash
 # terminal 1: local backend
 npm --prefix functions run build
-firebase emulators:start --project demo-ibit-reservations --only auth,database,functions \
+firebase emulators:start --project demo-ibit-reservations --only auth,database,functions,storage \
   --export-on-exit .emulator-data   # add --import .emulator-data on later runs
 
 # terminal 2: seed rooms, then open the app in Chrome

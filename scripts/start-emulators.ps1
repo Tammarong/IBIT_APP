@@ -15,7 +15,7 @@ try {
     npm --prefix functions run build
     if ($LASTEXITCODE -ne 0) { throw 'Functions build failed.' }
     $ibitData = Join-Path $ibitRoot '.emulator-data'
-    $ibitServices = if ($IncludeFirestoreForMigration) { 'auth,firestore,database,functions' } else { 'auth,database,functions' }
+    $ibitServices = if ($IncludeFirestoreForMigration) { 'auth,firestore,database,functions,storage' } else { 'auth,database,functions,storage' }
     $ibitArguments = @('emulators:start', '--project', 'demo-ibit-reservations', '--only', $ibitServices, '--export-on-exit', $ibitData)
     if (Test-Path -LiteralPath (Join-Path $ibitData 'firebase-export-metadata.json')) {
         $ibitArguments += @('--import', $ibitData)

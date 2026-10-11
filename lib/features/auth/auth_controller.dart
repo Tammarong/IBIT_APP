@@ -16,6 +16,7 @@ abstract interface class AuthRepository {
   Future<void> refreshUser();
   Future<void> resetPassword(String email);
   Future<void> signInGoogle();
+  Future<void> updateProfile({required String displayName, String? photoUrl});
   Future<void> signOut();
 }
 
@@ -108,6 +109,18 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> updateProfile({
+    required String displayName,
+    String? photoUrl,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Sign in to update your profile.');
+    await user.updateDisplayName(displayName.trim());
+    if (photoUrl != null) await user.updatePhotoURL(photoUrl);
+    await user.reload();
+  }
+
+  @override
   Future<void> signOut() async {
     await _auth.signOut();
     if (!EmulatorConfig.enabled && _googleInitialization != null) {
@@ -155,6 +168,15 @@ class AuthController extends ChangeNotifier {
   Future<bool> resetPassword(String email) =>
       _run(() => _repository.resetPassword(email));
   Future<bool> signInGoogle() => _run(_repository.signInGoogle);
+  Future<bool> updateProfile({
+    required String displayName,
+    String? photoUrl,
+  }) => _run(
+    () =>
+        _repository.updateProfile(displayName: displayName, photoUrl: photoUrl),
+    invalidCredentialMessage:
+        'Your session has expired. Please sign in again before updating your profile.',
+  );
   Future<bool> signOut() => _run(_repository.signOut);
 
   void clearError() {
@@ -162,7 +184,10 @@ class AuthController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<bool> _run(Future<void> Function() action) async {
+  Future<bool> _run(
+    Future<void> Function() action, {
+    String? invalidCredentialMessage,
+  }) async {
     if (loading) return false;
     loading = true;
     error = null;
@@ -174,7 +199,8 @@ class AuthController extends ChangeNotifier {
     } on FirebaseAuthException catch (exception) {
       error = switch (exception.code) {
         'invalid-credential' || 'wrong-password' || 'user-not-found' =>
-          'That email and password do not match. Please try again.',
+          invalidCredentialMessage ??
+              'That email and password do not match. Please try again.',
         'email-already-in-use' =>
           'An account already uses this email. Please sign in.',
         'invalid-email' => 'Enter a valid email address.',

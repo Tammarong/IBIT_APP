@@ -2,6 +2,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 abstract final class EmulatorConfig {
@@ -64,7 +65,9 @@ abstract final class EmulatorConfig {
         authDomain: enabled
             ? 'demo-ibit-reservations.firebaseapp.com'
             : '$projectId.firebaseapp.com',
-        storageBucket: enabled ? null : '$projectId.firebasestorage.app',
+        storageBucket: enabled
+            ? 'demo-ibit-reservations.appspot.com'
+            : '$projectId.firebasestorage.app',
         databaseURL: enabled
             ? 'https://demo-ibit-reservations-default-rtdb.firebaseio.com'
             : databaseUrl,
@@ -73,6 +76,7 @@ abstract final class EmulatorConfig {
     if (enabled) {
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
       FirebaseDatabase.instance.useDatabaseEmulator(host, 9000);
+      await FirebaseStorage.instance.useStorageEmulator(host, 9199);
     }
     if (enabled || hybrid) {
       FirebaseFunctions.instanceFor(
